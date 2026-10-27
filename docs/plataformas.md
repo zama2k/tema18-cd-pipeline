@@ -1,8 +1,9 @@
 # APIs de terceros: qué se consultó y qué implica
 
 Todas las páginas se leyeron el 2026-10-27. Los clientes de `scripts/` se escribieron contra
-estas descripciones y se prueban contra servidores falsos (`scripts/dev/fakes.mjs`), porque aún
-no hay cuentas reales. Lo que la documentación no deja claro está marcado como **sin verificar**.
+estas descripciones y se prueban contra servidores falsos (`scripts/dev/fakes.mjs`). Después se
+ejecutaron contra las plataformas reales ([evidencias](../evidencias/github/README.md)). Lo que la
+documentación no dejaba claro se marcó como **sin verificar** y cada punto indica ahora qué pasó.
 
 ## Render
 
@@ -34,22 +35,24 @@ Lo que usa `scripts/lib/render.mjs`:
   paquete público no hace falta.
 - La imagen debe ser `linux/amd64` (el runner de GitHub y el `Dockerfile` lo cumplen).
 
-**Sin verificar**: la documentación dice que `Image URL` acepta "una etiqueta o un digest", pero
-el texto extraído no muestra la sintaxis exacta. El pipeline usa la forma estándar
-`ghcr.io/owner/repo@sha256:<digest>`. Si Render la rechazase, el fallo saldría en el paso de
-deploy con el mensaje de la API (`400`), nunca en silencio.
+**Verificado en la práctica**: la documentación dice que `Image URL` acepta "una etiqueta o un digest",
+pero no muestra la sintaxis exacta. El pipeline usa la forma estándar
+`ghcr.io/owner/repo@sha256:<digest>` y Render la aceptó: el deploy pasó a `live` y `/health`
+devolvió el commit esperado ([CD Staging 40497439611](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40497439611)).
 
-**Sin verificar**: el formato de `image.sha` en la respuesta (con o sin prefijo `sha256:`,
+**Sin verificar del todo**: el formato de `image.sha` en la respuesta (con o sin prefijo `sha256:`,
 mayúsculas, o incluso una referencia completa). La documentación solo lo declara como cadena. Por
 eso el cliente lo **normaliza** (minúsculas, sin `sha256:`, sin la parte `imagen@`) y, si aun así no
 coincide con el digest pedido, solo emite un `::warning::`: la comprobación fuerte de qué se está
-ejecutando es `/health.commit`, que se verifica a continuación y sí bloquea.
+ejecutando es `/health.commit`, que se verifica a continuación y sí bloquea. En los runs revisados no
+apareció ningún aviso.
 
-**Sin verificar**: con `202` (deploy en cola, sin cuerpo) el cliente busca el deploy recién creado
+**Sin verificar del todo**: con `202` (deploy en cola, sin cuerpo) el cliente busca el deploy recién creado
 entre los últimos de la lista, filtrando por `image.ref` igual al pedido y `createdAt` posterior a
 la petición (con 10 s de tolerancia por desfase de relojes), y reintenta hasta que aparece. La
 forma exacta de la lista (`[{ deploy, cursor }]`) y de `createdAt` sigue la referencia de
-"list deploys", no se ha visto contra la API real.
+"list deploys". Los deploys reales se encontraron y esperaron sin incidencias, así que el camino
+funciona; no hemos comprobado cuál de las dos respuestas (`201` o `202`) devolvió Render.
 
 ## Vercel
 
@@ -76,8 +79,9 @@ forma exacta de la lista (`[{ deploy, cursor }]`) y de `createdAt` sigue la refe
   (`vercel list --meta` sí existe en la CLI, pero no tiene salida JSON). El cliente lista por
   proyecto, pagina con `until` y **filtra en local** por `meta.githubPrId`. Luego
   `DELETE /v13/deployments/{id}`.
-- **Sin verificar**: que los valores de `--meta` de la CLI aparezcan en `meta` de la respuesta
-  de `GET /v7/deployments` (la página lo describe como metadatos "del proveedor Git").
+- **Verificado en la práctica**: los valores de `--meta` de la CLI aparecen en `meta` de la respuesta de
+  `GET /v7/deployments`: [Preview cleanup 40500845098](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40500845098) borró las 3
+  previews de la PR #1 filtrando por `githubPrId`.
 
 ### Hallazgos de la prueba local de `vercel build`
 
@@ -113,9 +117,9 @@ cuenta para construir):
   mismo entorno (`auto_inactive` por defecto). Por eso "última deployment correcta" significa
   "tiene un `success` y ningún `failure`/`error`", no "su último estado es `success`".
 - La documentación no dice en qué orden devuelve la lista; el código ordena por `id` descendente.
-- **Sin verificar**: si una política de ramas del entorno acepta `ref` = sha. El cliente lo intenta
-  y, si la API responde `422`, reintenta con la rama por defecto (el sha real queda en el
-  `payload`).
+- **Verificado en la práctica**: la política de ramas del entorno aceptó `ref` = sha (los registros
+  `deploy-image` de staging y producción tienen el sha como `ref`). El reintento con la rama por
+  defecto ante un `422` queda como red de seguridad.
 - Approvals: `GET /repos/{o}/{r}/actions/runs/{run_id}/approvals` devuelve `state`
   (`approved`/`rejected`/`pending`), `user.login` y `comment`. Lo usa el job `release`.
 - `gh release create --generate-notes --notes-file f`: el texto propio se antepone a las notas
@@ -132,5 +136,6 @@ cuenta para construir):
 - Límites que respeta `scripts/lib/discord.mjs`: título 256, descripción 4096, valor de campo 1024,
   25 campos, 6000 caracteres en total. `color` es un entero.
 - Un `429` se reintenta una vez respetando `retry_after` (el 429 no está en esa página; viene de la
-  documentación general de límites de Discord, **sin verificar** aquí).
+  documentación general de límites de Discord, **sin verificar** aquí). Los avisos reales no
+  devolvieron error, pero no hemos visto su recepción en el canal.
 - La URL del webhook contiene el token: nunca se imprime ni aparece en los mensajes de error.

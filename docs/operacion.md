@@ -26,6 +26,10 @@
 despliega ese digest (producción pide aprobación), verifica `/health.commit` y avisa a Discord.
 Si el propio rollback falla no se intenta otro rollback: necesita una persona.
 
+`CD Production` exige un tag nuevo. Para volver a una versión ya publicada (por ejemplo, restaurar la
+v1.1.0 tras un rollback a la v1.0.0) se usa este mismo workflow, no una v1.1.1 vacía ni un tag
+reescrito. Ejecuciones reales: [a v1.0.0](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40520184940) y [de vuelta a v1.1.0](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40521067970).
+
 Los rollbacks se registran en la API de Deployments con `mode: "rollback"`. Sirven para saber qué
 ejecuta el entorno ahora (un deploy posterior que falle volvería a esa versión), pero **nunca**
 se ofrecen como candidato a producción: tras un rollback de staging, `CD Production` sin `sha`
@@ -37,6 +41,7 @@ restaurada ya tuvo su release). Indica el `sha` explícitamente, o despliega alg
 | Situación | Resultado |
 | --- | --- |
 | Falla Render, el health check o un smoke test | Rollback automático al digest anterior del entorno, job en rojo, Discord "rolled back". |
+| Render se queda en `update_in_progress` más de 600 s | Igual que arriba. Pasó de verdad en el [CD Staging 40501012364](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40501012364); el *re-run* funcionó. |
 | No había deployment anterior (primer despliegue) | Job en rojo, sin rollback posible, Discord "failed". |
 | Falla también el rollback | Job en rojo, resultado `rollback_failed`: hay que intervenir a mano (ver abajo). |
 | Falta `RENDER_API_KEY`, `RENDER_SERVICE_ID` o `APP_URL` | Se salta el despliegue con `::notice::` y un resumen; no falla. |

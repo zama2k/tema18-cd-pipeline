@@ -17,22 +17,29 @@ previews por PR y avisos a Discord.
 
 ## Nota para la corrección
 
-Este repositorio se desarrolló y verificó **en local**, antes de existir las cuentas y el remoto.
-Lo que no se podía comprobar sin ellas está marcado así a lo largo de la documentación:
+Todo se ha ejecutado de verdad en GitHub Actions, Render y Vercel el 2026-10-27. Tabla completa con
+enlaces a cada run: [`evidencias/github/README.md`](evidencias/github/README.md).
 
-| Pendiente de comprobar | Por qué | Cuándo |
-| --- | --- | --- |
-| Ejecuciones reales en GitHub Actions (CI, CD, rollback, previews) | El repositorio aún no está publicado | Al publicarlo se añadirán enlaces a las ejecuciones |
-| Despliegue real en Render y URLs de staging/producción | Aún no hay servicios creados | Tras `docs/setup.md` |
-| Preview real en Vercel | Aún no hay proyecto | Tras `docs/setup.md` |
-| Mensajes reales en Discord | Aún no hay webhook | Tras `docs/setup.md` |
-| Entornos, aprobación y protección de `main` | `scripts/setup-github.sh` está probado contra un `gh` falso, no contra GitHub | Al ejecutarlo |
-| Capturas y URLs de los entregables | Dependen de todo lo anterior | Al publicarlo |
+| Comprobado | Evidencia |
+| --- | --- |
+| CI en `main` y CD Staging automático (digest, health con commit, 7 smoke tests) | [CI 40497219077](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40497219077), [CD Staging 40497439611](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40497439611) |
+| CD Production con aprobación manual y release | [CD Production 40499710888](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40499710888) → [v1.0.0](https://github.com/zama2k/tema18-cd-pipeline/releases/tag/v1.0.0); [40503375451](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40503375451) → [v1.1.0](https://github.com/zama2k/tema18-cd-pipeline/releases/tag/v1.1.0) |
+| Preview por PR en Vercel, smoke con bypass, comentario único y limpieza al cerrar | [PR #1](https://github.com/zama2k/tema18-cd-pipeline/pull/1); CI en PR [40500637595](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40500637595); [Preview cleanup 40500845098](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40500845098) |
+| Rollback automático por fallo real de Render (timeout de 600 s) | [CD Staging 40501012364](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40501012364), intento 1 |
+| Rollback automático provocado (`simulate_failure`), run en rojo a propósito | [CD Staging 40520189660](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40520189660) |
+| Rollback manual de producción y vuelta a la versión nueva | [Rollback 40520184940](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40520184940), [40521067970](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40521067970) |
+| Entornos, aprobación y protección de `main` configurados en GitHub | `main`: check `CI OK`, 1 aprobación, code owners; `production`: revisor y espera de 1 min |
 
-Lo que **sí** se ejecutó de verdad en local (salidas reales en `evidencias/local/`): instalación
-limpia, lint, tests con cobertura y umbral, build, imagen Docker (arranque, `/health`, smoke tests,
-apagado ordenado), `vercel build`, `actionlint`, `shellcheck` y un ensayo completo del flujo de CD
-con contenedores reales y APIs de Render/GitHub/Discord simuladas.
+Estado final: [producción](https://tema18-cd-pipeline-production.onrender.com/health) y
+[staging](https://tema18-cd-pipeline-staging.onrender.com/health) sirven la **1.1.0** (`9925d74`).
+
+**No verificado por nosotros:** la recepción de los mensajes de Discord. Los jobs `Notify Discord`
+terminaron en success, pero no hemos visto los mensajes en el canal. No hay capturas de pantalla.
+
+Antes de publicar, el repositorio se había verificado en local (salidas en `evidencias/local/`):
+instalación limpia, lint, tests con cobertura y umbral, build, imagen Docker (arranque, `/health`,
+smoke tests, apagado ordenado), `vercel build`, `actionlint`, `shellcheck` y un ensayo completo del
+flujo de CD con contenedores reales y APIs de Render/GitHub/Discord simuladas.
 
 ## Arquitectura
 
@@ -155,20 +162,25 @@ rollback y concurrencia en [`docs/operacion.md`](docs/operacion.md).
 
 ## Limitaciones honestas
 
-- **Nada de lo que toca GitHub, Render, Vercel o Discord reales se ha ejecutado.** Los clientes se
-  escribieron leyendo la documentación oficial ([`docs/plataformas.md`](docs/plataformas.md)) y se
-  probaron contra servidores falsos que implementan solo el subconjunto documentado. Si la API real
-  se comporta distinto en algún detalle, se verá en la primera ejecución.
-- Puntos concretos **sin verificar** (detalle en `docs/plataformas.md`): que Render acepte
-  `imageUrl` con `@sha256:...`; que una política de ramas del entorno acepte un sha como `ref` (hay
-  reintento con la rama por defecto); que los `--meta` de la CLI de Vercel aparezcan en
-  `GET /v7/deployments`.
+- **Discord:** los avisos se enviaron (jobs en success), pero no hemos visto su recepción en el canal.
+- Los clientes de Render, GitHub y Vercel se escribieron leyendo la documentación oficial
+  ([`docs/plataformas.md`](docs/plataformas.md)) y la primera ejecución real confirmó los puntos que
+  estaban sin verificar: Render acepta `imageUrl` con `@sha256:...`, GitHub acepta un sha como `ref`
+  de un deployment y los `--meta` de Vercel aparecen en `GET /v7/deployments` (la limpieza borró las
+  3 previews de la PR #1).
 - La API guarda los *items* **en memoria** (máximo 100): se pierden al reiniciar. No hay base de
   datos.
 - El plan gratuito de Render duerme el servicio: el primer acceso tras un rato es lento. El health
   check con reintentos lo absorbe (unos 4 minutos de margen).
+- **Fallo real de Render:** en el [CD Staging 40501012364](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40501012364)
+  un deploy se quedó en `update_in_progress` durante 600 s (la imagen era correcta). El pipeline lo
+  trata como fallo y revierte al commit anterior; el reintento funcionó en segundos.
 - Con una sola cuenta nadie puede aprobar tu PR: el merge usa el bypass de administrador
-  (`enforce_admins` desactivado a propósito) y el revisor de `production` eres tú mismo.
+  (`gh pr merge --admin`, `enforce_admins` desactivado a propósito) y el revisor de `production` eres
+  tú mismo. El *wait timer* del entorno aparece como aprobación de `github-actions[bot]`; desde la
+  v1.1.0 la release solo lista a las personas. La v1.0.0 conserva el listado anterior como evidencia.
+- Volver a una versión ya publicada se hace con `rollback.yml`, no con `cd-production`, que exige un
+  tag nuevo (no se crea una v1.1.1 vacía ni se reescribe un tag).
 - El paquete de GHCR hay que hacerlo **público** (o dar a Render una credencial) la primera vez.
 - El rollback depende de que la imagen anterior siga en GHCR; Render no guarda copias.
 - Un `vercel build` local en Windows reescribe `package-lock.json`; descarta el cambio con
@@ -191,6 +203,7 @@ scripts/                                   cd-deploy (lo usan los workflows), re
 scripts/lib/ · scripts/dev/                librerías; servidores falsos, ensayo local, recolector de evidencias
 tests/app/ · tests/scripts/                Jest (app) y node:test (pipeline)
 docs/                                      enunciado, setup, operacion, plataformas, decisiones
+evidencias/github/                         ejecuciones reales (enlaces a cada run)
 evidencias/local/                          salidas reales de las comprobaciones locales
 ```
 

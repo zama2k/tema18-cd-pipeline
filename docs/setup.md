@@ -2,30 +2,21 @@
 
 Orden recomendado. Cada paso indica qué comprueba que ha ido bien.
 
-## 1. Sustituir los marcadores
-
-El repositorio usa marcadores que se cambian de una vez cuando conozcas tu usuario y tus URLs:
-
-```bash
-sd '__GH_OWNER__' 'tu-usuario-de-github' README.md docs .github
-sd '__STAGING_URL__' 'https://tu-staging.onrender.com' README.md
-sd '__PRODUCTION_URL__' 'https://tu-produccion.onrender.com' README.md
-```
-
-(`sd` es opcional: con `sed -i` o el buscar-y-reemplazar de tu editor es lo mismo.)
-
-## 2. Crear el repositorio público y subir `main`
+## 1. Crear el repositorio público y subir `main`
 
 ```bash
 git remote add origin https://github.com/<usuario>/tema18-cd-pipeline.git
 git push -u origin main
 ```
 
+Si lo haces en tu propia cuenta, cambia en `README.md` el usuario `zama2k` de las insignias y las URL
+de Render por las tuyas.
+
 Comprobación: la pestaña *Actions* muestra el workflow **CI**. Con `main` ya subido, CI construye y
 publica la imagen en GHCR (job *Build image*). Hasta que no configures nada más, `preview` se salta
 con un aviso y los CD se saltan el paso de Render con un aviso: no fallan.
 
-## 3. Entornos, variables y protección de `main`
+## 2. Entornos, variables y protección de `main`
 
 ```bash
 gh auth login
@@ -51,7 +42,7 @@ Si todavía no tienes las URLs, ejecútalo igualmente y repítelo después: las 
 avisan, no se crean vacías. Los *required reviewers* en repositorios privados exigen un plan de
 pago; en un repositorio público funcionan en el plan gratuito.
 
-## 4. Secretos
+## 3. Secretos
 
 El script no los crea (los valores no deben pasar por él):
 
@@ -82,7 +73,7 @@ gh secret set RENDER_API_KEY --env production
 | `APP_URL` | `staging` y `production` | URL pública del servicio, sin barra final |
 | `NODE_ENV` | `staging` y `production` | `staging` / `production`, como pide el enunciado (referencia: el pipeline no lo lee) |
 
-## 5. Render (dos servicios de imagen)
+## 4. Render (dos servicios de imagen)
 
 Hazlo después de que CI haya publicado la primera imagen.
 
@@ -93,19 +84,19 @@ Hazlo después de que CI haya publicado la primera imagen.
 3. *Health Check Path*: `/health`. Variables del servicio: `APP_ENV=staging` (o `production`) y
    `NODE_ENV=production` (en el servicio de Render se deja `production` también en staging: es lo
    que espera Express; la etiqueta del entorno la da `APP_ENV`). Render inyecta `PORT`.
-4. Repite para producción. Anota ambos `srv-...` y URLs para el paso 3.
+4. Repite para producción. Anota ambos `srv-...` y URLs para el paso 2.
 5. El plan gratuito duerme el servicio tras un rato sin tráfico: el primer acceso tarda (arranque en
    frío). El health check con reintentos del pipeline lo tolera; el badge de versión desplegada
    puede tardar en cargar.
 
-## 6. Vercel (solo previews)
+## 5. Vercel (solo previews)
 
 1. Crea el proyecto con `vercel link` **sin conectar el repositorio de Git** (si lo conectas,
    Vercel desplegará por su cuenta además del workflow y tendrás dos previews por PR).
 2. Framework preset: *Other*. El `vercel.json` del repositorio ya fija la configuración.
 3. Activa *Protection Bypass for Automation* y copia el secreto.
 
-## 7. Primer ciclo completo
+## 6. Primer ciclo completo
 
 1. Abre una PR → CI → comentario con la preview.
 2. Haz el merge (bypass de administrador) → CI publica la imagen → **CD Staging** despliega.
