@@ -85,7 +85,7 @@ node scripts/dev/local-e2e.mjs   # ensayo completo del CD (usa los puertos 3201-
 ```
 
 Endpoints: `GET /`, `GET /health` (estado, versión, **commit**, entorno, uptime), `GET /api/info`,
-`GET`/`POST /api/items` (valida y responde 400).
+`GET`/`POST /api/items` (valida y responde 400) y `GET /api/items/:id` (400 si el id no es un entero positivo, 404 si no existe; desde la v1.1.0).
 
 ## Cómo funciona el pipeline
 

@@ -75,6 +75,27 @@ describe('/api/items', () => {
     expect(res.body.error).toMatch(/name/);
   });
 
+  it('returns one item by id', async () => {
+    const app = createApp({ env });
+    await request(app).post('/api/items').send({ name: 'first' });
+    const created = await request(app).post('/api/items').send({ name: 'second' });
+    const res = await request(app).get(`/api/items/${created.body.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: 2, name: 'second' });
+  });
+
+  it('returns 404 for an item that does not exist', async () => {
+    const res = await request(createApp({ env })).get('/api/items/999');
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  it.each(['abc', '0', '-1', '1.5', '1e3'])('rejects the invalid id %s with 400', async (id) => {
+    const res = await request(createApp({ env })).get(`/api/items/${id}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/id/);
+  });
+
   it('rejects malformed JSON with 400', async () => {
     const res = await request(createApp({ env }))
       .post('/api/items')

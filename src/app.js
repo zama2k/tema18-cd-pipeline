@@ -52,6 +52,16 @@ function createApp({ env = process.env } = {}) {
     res.json({ items, count: items.length });
   });
 
+  app.get('/api/items/:id', (req, res) => {
+    // Strict positive integer: Number('1e3') or parseInt('1.5') would accept malformed ids.
+    if (!/^[1-9]\d*$/.test(req.params.id)) {
+      return res.status(400).json({ error: '"id" must be a positive integer' });
+    }
+    const item = items.find((i) => i.id === Number(req.params.id));
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    return res.json(item);
+  });
+
   app.post('/api/items', (req, res) => {
     const name = req.body && req.body.name;
     if (typeof name !== 'string' || name.trim() === '' || name.length > MAX_NAME_LENGTH) {
