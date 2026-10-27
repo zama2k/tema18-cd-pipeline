@@ -9,10 +9,13 @@ on:
 permissions:
   contents: read
 
-# PR runs are superseded by newer pushes. Runs on main are never cancelled:
-# every merged commit must get its image so it can be deployed.
+# Pull requests: one group per PR, a newer push cancels the older run.
+# Pushes to main: one group per commit. A shared group would be no protection,
+# because GitHub cancels the PENDING run of a group even with
+# cancel-in-progress: false, and a commit whose CI is cancelled never gets its
+# sha-<sha> image. With a group per sha nothing is ever replaced.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:

@@ -49,3 +49,12 @@ test('gh api calls always name the repository explicitly', () => {
     }
   }
 });
+
+test('CI concurrency is per commit on push (no queued run is replaced) and cancels only pull requests', () => {
+  const ci = workflows['ci.yml'];
+  const group = ci.match(/^ {2}group: (.+)$/m)[1];
+  assert.match(group, /github\.sha/);
+  assert.match(group, /pull_request\.number/);
+  assert.match(ci, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
+  assert.doesNotMatch(ci, /never cancelled/);
+});
