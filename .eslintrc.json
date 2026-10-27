@@ -1,0 +1,18 @@
+{
+  "root": true,
+  "env": { "node": true, "es2022": true, "jest": true },
+  "parserOptions": { "ecmaVersion": 2023, "sourceType": "script" },
+  "extends": ["eslint:recommended"],
+  "rules": {
+    "no-console": "off",
+    "eqeqeq": "error",
+    "prefer-const": "error",
+    "no-var": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.mjs"],
+      "parserOptions": { "sourceType": "module" }
+    }
+  ]
+}
