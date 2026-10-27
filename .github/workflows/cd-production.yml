@@ -109,7 +109,8 @@ jobs:
     name: Deploy to production
     needs: validate
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Worst case is about 36 minutes (see docs/operacion.md), so 30 would cut a rollback short.
+    timeout-minutes: 45
     permissions:
       contents: read
       deployments: write

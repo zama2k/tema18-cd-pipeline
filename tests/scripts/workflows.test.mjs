@@ -58,3 +58,13 @@ test('CI concurrency is per commit on push (no queued run is replaced) and cance
   assert.match(ci, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
   assert.doesNotMatch(ci, /never cancelled/);
 });
+
+test('deploy jobs allow for the worst case: deploy + checks + rollback (see docs/operacion.md)', () => {
+  for (const file of ['cd-staging.yml', 'cd-production.yml', 'rollback.yml']) {
+    const deployJobs = Object.entries(jobsOf(workflows[file])).filter(([, body]) => body.includes('cd-deploy.mjs'));
+    assert.equal(deployJobs.length, 1, file);
+    const [, body] = deployJobs[0];
+    const minutes = Number(body.match(/timeout-minutes: (\d+)/)[1]);
+    assert.ok(minutes >= 45, `${file} deploy job has timeout-minutes ${minutes}`);
+  }
+});

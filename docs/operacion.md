@@ -37,6 +37,23 @@ Si el propio rollback falla no se intenta otro rollback: necesita una persona.
 | Falta `DISCORD_WEBHOOK_URL` | Se salta la notificación con `::notice::`. Una notificación fallida nunca rompe el pipeline. |
 | Un commit más nuevo ya está en `main` | CD Staging salta el commit antiguo ("superseded"); lo despliega su sucesor. |
 
+### Por qué el job de despliegue tiene 45 minutos
+
+Peor caso de un deploy que falla al final y obliga a revertir (valores por defecto de
+`cd-deploy.mjs`; la espera de aprobación del entorno no cuenta):
+
+| Fase | Cálculo | Peor caso |
+| --- | --- | --- |
+| Deploy en Render | `--render-timeout` 600 s + un intervalo de sondeo (5 s) | ~605 s |
+| Health check | 12 intentos × 10 s de timeout + esperas 5, 7,5, 11, 17, 25 y 5 × 30 s | ~366 s |
+| Smoke tests | 7 comprobaciones × 15 s de timeout | ~105 s |
+| Rollback: deploy + health check | ~605 s + ~366 s | ~971 s |
+| Búsqueda del deploy tras un `202` (dos veces) | 10 intentos × 2 s, por deploy | ~40 s |
+| **Total** | | **~2.090 s ≈ 35 min** (+ ~1 min de checkout y setup) |
+
+Con 30 minutos el runner habría matado el job en pleno rollback. 45 deja ~9 minutos de margen. Si
+reduces `--render-timeout` a 300 s el peor caso baja a ~25 min.
+
 Si el rollback automático falla: abre el servicio en Render, *Events → Rollback* a un deploy
 anterior, y después usa el workflow **Rollback** para dejar el historial de GitHub coherente.
 
