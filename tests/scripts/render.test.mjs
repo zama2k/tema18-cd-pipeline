@@ -60,10 +60,25 @@ test('retries on 429 honouring Retry-After', async () => {
   assert.equal(result.status, 'live');
 });
 
-test('looks up the newest deploy when Render answers 202 without a body', async () => {
+test('after a 202 the new deploy is found by image and creation time, not just "the newest"', async () => {
   fake.answer202 = true;
+  fake.seedDeploy({ ref }); // the previous deploy of the same image, already live
+  fake.listLag = 2; // the list does not show the new deploy for two calls
   const result = await deployImage(client(), ref, { intervalMs: 0 });
-  assert.equal(result.deployId, 'dep-1');
+  assert.equal(result.deployId, 'dep-2');
+});
+
+test('after a 202 a deploy of another image created in time is not mistaken for ours', async () => {
+  fake.answer202 = true;
+  fake.seedDeploy({ ref: `${IMAGE}@${digestOf('9')}`, createdAt: new Date(Date.now() + 5000).toISOString() });
+  fake.listLag = 100;
+  await assert.rejects(
+    new RenderClient({ apiKey: 'rnd_key', serviceId: 'srv-1', apiUrl: `${fake.url}/v1`, sleep: noSleep, log: quiet }).triggerDeploy(
+      ref,
+      { lookupAttempts: 3 },
+    ),
+    /did not show up/,
+  );
 });
 
 test('reports API errors without leaking the API key', async () => {

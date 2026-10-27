@@ -4,6 +4,14 @@ import { ApiError, backoffDelay, httpJson, sleep as realSleep, warning } from '.
 // and /retrieve-deploy (see docs/plataformas.md).
 const FAILED = new Set(['build_failed', 'update_failed', 'pre_deploy_failed', 'canceled', 'deactivated']);
 
+// Allowance for the difference between the runner's clock and Render's.
+const CLOCK_SKEW_MS = 10000;
+
+const sameImage = (a, b) => {
+  const clean = (v) => String(v || '').trim().toLowerCase().replace(/^https?:\/\//, '');
+  return clean(a) !== '' && clean(a) === clean(b);
+};
+
 export class RenderClient {
   constructor({
     apiKey,
@@ -46,16 +54,24 @@ export class RenderClient {
   }
 
   // Returns the new deploy object. A 202 means the deploy was queued without a
-  // body, so the newest deploy is looked up instead.
-  async triggerDeploy(imageRef) {
+  // body. The newest deploy of the service may then still be the PREVIOUS one
+  // (already live), so the new deploy is identified by the image we asked for
+  // and by being created after our request, retrying until it shows up.
+  async triggerDeploy(imageRef, { lookupAttempts = 10, lookupIntervalMs = 2000 } = {}) {
+    const requestedAt = Date.now();
     const res = await this.request('POST', '/deploys', { imageUrl: imageRef, clearCache: 'do_not_clear' });
     if (res.data?.id) return res.data;
-    this.log(`Render queued the deploy (HTTP ${res.status}); looking up the newest deploy`);
-    const list = await this.request('GET', '/deploys?limit=1');
-    const first = (list.data || [])[0];
-    const newest = first?.deploy ?? first;
-    if (!newest?.id) throw new Error('Render accepted the deploy but no deploy could be found');
-    return newest;
+    this.log(`Render queued the deploy (HTTP ${res.status}); looking for it in the deploy list`);
+    for (let attempt = 1; attempt <= lookupAttempts; attempt++) {
+      const list = await this.request('GET', '/deploys?limit=10');
+      const deploys = (list.data || []).map((entry) => entry.deploy ?? entry);
+      const created = deploys.find(
+        (d) => d?.id && sameImage(d.image?.ref, imageRef) && Date.parse(d.createdAt) >= requestedAt - CLOCK_SKEW_MS,
+      );
+      if (created) return created;
+      if (attempt < lookupAttempts) await this.sleep(lookupIntervalMs);
+    }
+    throw new Error(`Render accepted the deploy of ${imageRef} but it did not show up in the deploy list`);
   }
 
   async getDeploy(deployId) {

@@ -59,6 +59,7 @@ export class FakeRender extends FakeServer {
     this.deploys = [];
     this.throttle = 0; // answer 429 this many times before behaving
     this.reportedSha = null; // override image.sha (formats are not fixed by Render's docs)
+    this.listLag = 0; // list calls that do not show the newest deploy yet (after a 202)
   }
 
   async route(req) {
@@ -73,6 +74,7 @@ export class FakeRender extends FakeServer {
       const deploy = {
         id: `dep-${this.deploys.length + 1}`,
         status: 'created',
+        createdAt: new Date().toISOString(),
         image: { ref: req.body.imageUrl, sha: this.reportedSha ?? req.body.imageUrl.split('@')[1] },
         polls: 0,
       };
@@ -80,8 +82,14 @@ export class FakeRender extends FakeServer {
       return this.answer202 ? { status: 202 } : { status: 201, body: this.#view(deploy) };
     }
     if (req.method === 'GET' && req.path === base) {
-      const newest = this.deploys.at(-1);
-      return { status: 200, body: newest ? [{ deploy: this.#view(newest), cursor: 'c' }] : [] };
+      let visible = this.deploys;
+      if (this.listLag > 0) {
+        this.listLag -= 1;
+        visible = this.deploys.slice(0, -1);
+      }
+      const limit = Number(req.query.limit || 20);
+      const newest = [...visible].reverse().slice(0, limit);
+      return { status: 200, body: newest.map((d) => ({ deploy: this.#view(d), cursor: 'c' })) };
     }
     const match = req.path.match(new RegExp(`^${base}/([\\w-]+)$`));
     if (req.method === 'GET' && match) {
@@ -91,6 +99,11 @@ export class FakeRender extends FakeServer {
       return { status: 200, body: this.#view(deploy) };
     }
     return null;
+  }
+
+  // A deploy that already exists, e.g. the one currently live.
+  seedDeploy({ ref, status = 'live', createdAt = new Date(Date.now() - 3600000).toISOString() }) {
+    this.deploys.push({ id: `dep-${this.deploys.length + 1}`, status, createdAt, image: { ref, sha: ref.split('@')[1] }, polls: 0 });
   }
 
   async #advance(deploy) {
