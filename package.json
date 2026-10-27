@@ -1,6 +1,6 @@
 {
   "name": "tema18-cd-pipeline",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Small Express API used to demonstrate a full CD pipeline (GitHub Actions, GHCR, Render, Vercel previews, Discord)",
   "main": "src/server.js",
