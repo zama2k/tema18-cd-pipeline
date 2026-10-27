@@ -237,6 +237,13 @@ OK   production serves commit 3333333
     | output deployment_id=8
     | output rolled_back_to=
 OK   rollback restored commit 2222222
+    | ::notice::No record of a promotable deployment in environment "production" (the environment was rolled back to 2222222222222222222222222222222222222222; pass the sha you want to promote explicitly)
+    | output found=false
+    | output sha=
+    | output image=
+    | output digest=
+    | output deployment_id=
+OK   the rollback is not offered as a promotion candidate
 
 === 8. Deployment history recorded in the (fake) GitHub Deployments API ===
   #1 staging    1111111 -> in_progress > success > inactive > inactive

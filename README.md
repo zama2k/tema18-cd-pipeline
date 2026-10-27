@@ -145,13 +145,13 @@ rollback y concurrencia en [`docs/operacion.md`](docs/operacion.md).
 | --- | --- |
 | Tests de la app (Jest + supertest) | 26 tests, cobertura 97,22 % sentencias / 94,44 % ramas / 94,44 % funciones / 100 % líneas; umbral global 80 % |
 | El umbral realmente bloquea | con un umbral de ramas del 99 % Jest sale con código 1 (`04-jest-umbral-incumplido.txt`) |
-| Tests de los scripts del pipeline (node:test) | 108 tests, 97,17 % líneas / 92,11 % ramas / 89,47 % funciones; umbral de líneas 80 % |
+| Tests de los scripts del pipeline (node:test) | 121 tests, 97,28 % líneas / 92,40 % ramas / 89,92 % funciones; umbral de líneas 80 % |
 | Lint | ESLint 10 con `.eslintrc.json` vía `FlatCompat`: sin errores |
 | `actionlint` 1.7.12 sobre los 5 workflows | sin avisos |
 | `shellcheck` 0.11.0 sobre `scripts/setup-github.sh` | sin avisos |
 | Imagen Docker | 248,8 MB, usuario `node`, `HEALTHCHECK` en estado `healthy`, `/health` con el commit correcto, 7 smoke tests, `SIGTERM` → salida 0 en ~1,1 s |
 | `vercel build` (CLI 65.4.0) | correcto; el manejador generado pasa los 7 smoke tests |
-| Ensayo completo del CD (`local-e2e.mjs`) | 15 comprobaciones correctas: deploy, health, smoke, rollback simulado y real, promoción, rollback manual |
+| Ensayo completo del CD (`local-e2e.mjs`) | 16 comprobaciones correctas: deploy, health, smoke, rollback simulado y real, promoción, rollback manual, el rollback no es candidato a promoción |
 
 ## Limitaciones honestas
 

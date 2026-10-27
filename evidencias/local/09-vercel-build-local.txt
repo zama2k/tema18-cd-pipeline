@@ -19,7 +19,7 @@ Running "npm run build"
 build ok: 3 runtime file(s) parsed, dependencies verified, app factory loads
 Installing dependencies...
 
-added 2 packages in 651ms
+added 2 packages in 707ms
 
 102 packages are looking for funding
   run `npm fund` for details

@@ -21,6 +21,6 @@ Jest: Coverage for branches (94.44%) does not meet "global" threshold (99%)
 Test Suites: 3 passed, 3 total
 Tests:       26 passed, 26 total
 Snapshots:   0 total
-Time:        0.837 s, estimated 1 s
+Time:        1.872 s
 Ran all test suites.
 [exit code: 1]
