@@ -1,7 +1,7 @@
 # Every change needs the owner's review; workflows and deploy tooling are
 # listed explicitly so they stay protected even if the catch-all is relaxed.
-*                      @__GH_OWNER__
-/.github/              @__GH_OWNER__
-/.github/workflows/    @__GH_OWNER__
-/scripts/              @__GH_OWNER__
-/Dockerfile            @__GH_OWNER__
+*                      @zama2k
+/.github/              @zama2k
+/.github/workflows/    @zama2k
+/scripts/              @zama2k
+/Dockerfile            @zama2k

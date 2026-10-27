@@ -1,9 +1,9 @@
 # tema18-cd-pipeline
 
-[![CI](https://github.com/__GH_OWNER__/tema18-cd-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/__GH_OWNER__/tema18-cd-pipeline/actions/workflows/ci.yml)
-[![CD Staging](https://github.com/__GH_OWNER__/tema18-cd-pipeline/actions/workflows/cd-staging.yml/badge.svg)](https://github.com/__GH_OWNER__/tema18-cd-pipeline/actions/workflows/cd-staging.yml)
-[![CD Production](https://github.com/__GH_OWNER__/tema18-cd-pipeline/actions/workflows/cd-production.yml/badge.svg)](https://github.com/__GH_OWNER__/tema18-cd-pipeline/actions/workflows/cd-production.yml)
-[![Rollback](https://github.com/__GH_OWNER__/tema18-cd-pipeline/actions/workflows/rollback.yml/badge.svg)](https://github.com/__GH_OWNER__/tema18-cd-pipeline/actions/workflows/rollback.yml)
+[![CI](https://github.com/zama2k/tema18-cd-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/zama2k/tema18-cd-pipeline/actions/workflows/ci.yml)
+[![CD Staging](https://github.com/zama2k/tema18-cd-pipeline/actions/workflows/cd-staging.yml/badge.svg)](https://github.com/zama2k/tema18-cd-pipeline/actions/workflows/cd-staging.yml)
+[![CD Production](https://github.com/zama2k/tema18-cd-pipeline/actions/workflows/cd-production.yml/badge.svg)](https://github.com/zama2k/tema18-cd-pipeline/actions/workflows/cd-production.yml)
+[![Rollback](https://github.com/zama2k/tema18-cd-pipeline/actions/workflows/rollback.yml/badge.svg)](https://github.com/zama2k/tema18-cd-pipeline/actions/workflows/rollback.yml)
 ![Staging version](https://img.shields.io/badge/dynamic/json?url=__STAGING_URL__/health&query=%24.version&label=staging&cacheSeconds=300)
 ![Production version](https://img.shields.io/badge/dynamic/json?url=__PRODUCTION_URL__/health&query=%24.version&label=production&cacheSeconds=300)
 
