@@ -58,6 +58,7 @@ export class FakeRender extends FakeServer {
     Object.assign(this, { apiKey, serviceId, pollsUntilLive, failRefs: new Set(failRefs), onLive, answer202 });
     this.deploys = [];
     this.throttle = 0; // answer 429 this many times before behaving
+    this.reportedSha = null; // override image.sha (formats are not fixed by Render's docs)
   }
 
   async route(req) {
@@ -72,7 +73,7 @@ export class FakeRender extends FakeServer {
       const deploy = {
         id: `dep-${this.deploys.length + 1}`,
         status: 'created',
-        image: { ref: req.body.imageUrl, sha: req.body.imageUrl.split('@')[1] },
+        image: { ref: req.body.imageUrl, sha: this.reportedSha ?? req.body.imageUrl.split('@')[1] },
         polls: 0,
       };
       this.deploys.push(deploy);

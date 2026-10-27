@@ -1,4 +1,4 @@
-import { ApiError, backoffDelay, httpJson, sleep as realSleep } from './util.mjs';
+import { ApiError, backoffDelay, httpJson, sleep as realSleep, warning } from './util.mjs';
 
 // API reference consulted: https://api-docs.render.com/reference/create-deploy
 // and /retrieve-deploy (see docs/plataformas.md).
@@ -85,15 +85,28 @@ export class RenderClient {
   }
 }
 
-// Deploys `imageRef` and waits until it is live. If Render reports the image
-// digest, it must match the one we asked for.
+// Render's documentation does not fix the format of image.sha, so compare
+// loosely: case-insensitive, without the "sha256:" prefix or an image@ part.
+export const normalizeDigest = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .split('@')
+    .pop()
+    .replace(/^sha256:/, '');
+
+// Deploys imageRef and waits until it is live. A digest reported by Render
+// that still differs after normalisation is only a warning: the strong check
+// is /health.commit, which the caller verifies next.
 export async function deployImage(client, imageRef, { expectedDigest, timeoutMs, intervalMs } = {}) {
   const created = await client.triggerDeploy(imageRef);
   client.log(`triggered deploy ${created.id} for ${imageRef}`);
   const live = await client.waitForLive(created.id, { timeoutMs, intervalMs });
   const reported = live.image?.sha;
-  if (expectedDigest && reported && reported !== expectedDigest) {
-    throw new Error(`Render is running digest ${reported}, expected ${expectedDigest}`);
+  let digestMismatch = false;
+  if (expectedDigest && reported && normalizeDigest(reported) !== normalizeDigest(expectedDigest)) {
+    digestMismatch = true;
+    warning(`Render reports image digest ${reported}, expected ${expectedDigest}; relying on /health.commit`);
   }
-  return { deployId: created.id, status: live.status, digest: reported || null };
+  return { deployId: created.id, status: live.status, digest: reported || null, digestMismatch };
 }

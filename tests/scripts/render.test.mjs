@@ -3,7 +3,7 @@ import { after, beforeEach, test } from 'node:test';
 import { FakeRender } from '../../scripts/dev/fakes.mjs';
 import { RenderClient, deployImage } from '../../scripts/lib/render.mjs';
 import { main } from '../../scripts/render-deploy.mjs';
-import { IMAGE, digestOf, noSleep, quiet, tempFile } from './helpers.mjs';
+import { IMAGE, captureLog, digestOf, noSleep, quiet, tempFile } from './helpers.mjs';
 
 const ref = `${IMAGE}@${digestOf('1')}`;
 let fake;
@@ -37,8 +37,21 @@ test('fails with a timeout when the deploy never becomes live', async () => {
   await assert.rejects(deployImage(client(), ref, { timeoutMs: 30, intervalMs: 10 }), /Timed out/);
 });
 
-test('fails when Render reports a different digest than requested', async () => {
-  await assert.rejects(deployImage(client(), ref, { expectedDigest: digestOf('2'), intervalMs: 0 }), /expected sha256:2/);
+test('a digest reported in another format is not a mismatch (case, sha256: prefix, image@ part)', async () => {
+  for (const reported of [digestOf('1').toUpperCase(), digestOf('1').slice(7), `${IMAGE}@${digestOf('1')}`]) {
+    fake.reportedSha = reported;
+    const { value, lines } = await captureLog(() => deployImage(client(), ref, { expectedDigest: digestOf('1'), intervalMs: 0 }));
+    assert.equal(value.digestMismatch, false, reported);
+    assert.ok(!lines.some((l) => l.startsWith('::warning::')), reported);
+  }
+});
+
+test('a really different digest only warns: /health.commit is the strong check', async () => {
+  fake.reportedSha = digestOf('2');
+  const { value, lines } = await captureLog(() => deployImage(client(), ref, { expectedDigest: digestOf('1'), intervalMs: 0 }));
+  assert.equal(value.status, 'live');
+  assert.equal(value.digestMismatch, true);
+  assert.ok(lines.some((l) => l.startsWith('::warning::') && l.includes('/health.commit')));
 });
 
 test('retries on 429 honouring Retry-After', async () => {

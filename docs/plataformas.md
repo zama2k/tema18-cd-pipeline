@@ -37,8 +37,19 @@ Lo que usa `scripts/lib/render.mjs`:
 **Sin verificar**: la documentación dice que `Image URL` acepta "una etiqueta o un digest", pero
 el texto extraído no muestra la sintaxis exacta. El pipeline usa la forma estándar
 `ghcr.io/owner/repo@sha256:<digest>`. Si Render la rechazase, el fallo saldría en el paso de
-deploy con el mensaje de la API (`400`), nunca en silencio. Cuando `GET deploy` informa
-`image.sha`, el cliente comprueba que coincide con el digest pedido.
+deploy con el mensaje de la API (`400`), nunca en silencio.
+
+**Sin verificar**: el formato de `image.sha` en la respuesta (con o sin prefijo `sha256:`,
+mayúsculas, o incluso una referencia completa). La documentación solo lo declara como cadena. Por
+eso el cliente lo **normaliza** (minúsculas, sin `sha256:`, sin la parte `imagen@`) y, si aun así no
+coincide con el digest pedido, solo emite un `::warning::`: la comprobación fuerte de qué se está
+ejecutando es `/health.commit`, que se verifica a continuación y sí bloquea.
+
+**Sin verificar**: con `202` (deploy en cola, sin cuerpo) el cliente busca el deploy recién creado
+entre los últimos de la lista, filtrando por `image.ref` igual al pedido y `createdAt` posterior a
+la petición (con 10 s de tolerancia por desfase de relojes), y reintenta hasta que aparece. La
+forma exacta de la lista (`[{ deploy, cursor }]`) y de `createdAt` sigue la referencia de
+"list deploys", no se ha visto contra la API real.
 
 ## Vercel
 
