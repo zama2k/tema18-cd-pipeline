@@ -102,7 +102,7 @@ set_var() {
 }
 
 echo "Environment variables"
-set_var staging NODE_ENV production
+set_var staging NODE_ENV staging
 set_var staging APP_URL "${STAGING_APP_URL:-}"
 set_var staging RENDER_SERVICE_ID "${STAGING_RENDER_SERVICE_ID:-}"
 set_var production NODE_ENV production

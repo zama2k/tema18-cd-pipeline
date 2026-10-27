@@ -79,7 +79,8 @@ test('variables without a value are reported, not set to empty strings', () => {
   const r = run(['owner/repo']);
   assert.doesNotMatch(r.calls, /variable set APP_URL/);
   assert.match(r.stdout, /staging: APP_URL not set/);
-  assert.match(r.calls, /variable set NODE_ENV --env production/);
+  assert.match(r.calls, /variable set NODE_ENV --env production --repo owner\/repo --body production/);
+  assert.match(r.calls, /variable set NODE_ENV --env staging --repo owner\/repo --body staging/);
 });
 
 test('discovers the repository when none is given and rejects malformed names', () => {

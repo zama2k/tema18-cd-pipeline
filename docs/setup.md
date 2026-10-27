@@ -80,7 +80,7 @@ gh secret set RENDER_API_KEY --env production
 | --- | --- | --- |
 | `RENDER_SERVICE_ID` | `staging` y `production` | `srv-...`, aparece en la URL del servicio en Render |
 | `APP_URL` | `staging` y `production` | URL pública del servicio, sin barra final |
-| `NODE_ENV` | `staging` y `production` | `production` (referencia; el pipeline no lo lee) |
+| `NODE_ENV` | `staging` y `production` | `staging` / `production`, como pide el enunciado (referencia: el pipeline no lo lee) |
 
 ## 5. Render (dos servicios de imagen)
 
@@ -91,7 +91,8 @@ Hazlo después de que CI haya publicado la primera imagen.
    Change visibility*), o añade en Render una credencial de registro con `read:packages`. Sin una
    de las dos cosas Render no puede bajar la imagen.
 3. *Health Check Path*: `/health`. Variables del servicio: `APP_ENV=staging` (o `production`) y
-   `NODE_ENV=production`. Render inyecta `PORT`.
+   `NODE_ENV=production` (en el servicio de Render se deja `production` también en staging: es lo
+   que espera Express; la etiqueta del entorno la da `APP_ENV`). Render inyecta `PORT`.
 4. Repite para producción. Anota ambos `srv-...` y URLs para el paso 3.
 5. El plan gratuito duerme el servicio tras un rato sin tráfico: el primer acceso tarda (arranque en
    frío). El health check con reintentos del pipeline lo tolera; el badge de versión desplegada
