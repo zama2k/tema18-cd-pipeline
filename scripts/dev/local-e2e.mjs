@@ -168,6 +168,8 @@ async function main() {
     expect(r.code === 0 && (await servedCommit()) === COMMITS.three, 'production serves commit 3333333');
     r = await deploy('production', COMMITS.two, DIGESTS.two, ['--mode', 'rollback', '--no-auto-rollback', '--smoke-mode', 'readonly']);
     expect(r.code === 0 && (await servedCommit()) === COMMITS.two, 'rollback restored commit 2222222');
+    r = await runScript('scripts/deployments.mjs', ['last-good', '--environment', 'production'], baseEnv);
+    expect(r.out.includes('rolled back to') && r.out.includes('found=false'), 'the rollback is not offered as a promotion candidate');
 
     banner('8. Deployment history recorded in the (fake) GitHub Deployments API');
     for (const d of github.deployments) {
