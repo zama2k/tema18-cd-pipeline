@@ -12,7 +12,7 @@ creadas (ver "Nota para la corrección" del README).
 | Script `build` funcional | `npm run build` → `scripts/build-check.mjs` (sintaxis, dependencias de producción, la app carga) + imagen Docker | Local |
 | CI existente (lint + test + build) | `.github/workflows/ci.yml`: `lint` ∥ `test` → `build` → `ci-ok` | Pendiente GitHub (los mismos comandos: Local) |
 | CD staging (`cd-staging.yml`) disparado al pasar CI en `main` | `on.workflow_run` de `CI`, solo `conclusion == success` y `event == push`; usa `workflow_run.head_sha` | Pendiente GitHub |
-| Despliegue en plataforma elegida | **Render** (imagen de GHCR) vía `scripts/render-deploy.mjs` | Cliente: Local contra Render falso. Render real: Pendiente |
+| Despliegue en plataforma elegida | **Render** (imagen de GHCR) vía `scripts/lib/render.mjs`, que usan los workflows a través de `scripts/cd-deploy.mjs` (`scripts/render-deploy.mjs` es la CLI independiente del mismo cliente, para un redeploy manual) | Cliente: Local contra Render falso. Render real: Pendiente |
 | Health check post-deploy (200 en `/health`) | `scripts/health-check.mjs` (exige además `commit == sha`) | Local |
 | Environment `staging` | `deploy-staging` → `environment: staging` | Pendiente GitHub |
 | CD production (`cd-production.yml`) manual | `workflow_dispatch` con `version` y `sha` | Pendiente GitHub |
@@ -44,7 +44,7 @@ creadas (ver "Nota para la corrección" del README).
 | Concurrency: un deploy a la vez por entorno | `concurrency: deploy-<entorno>`, `cancel-in-progress: false` (semántica en `docs/operacion.md`) | Pendiente GitHub |
 | Cancelar pendientes cuando llega uno nuevo | GitHub sustituye el run pendiente por el más reciente en el mismo grupo | Pendiente GitHub |
 | Docker: build + push a GHCR | Job `build` de `ci.yml` (solo `push` a `main`; etiquetas `sha-<sha>` y `main`) | Imagen: Local. Push: Pendiente |
-| Deploy usando la imagen | `render-deploy.mjs --image ghcr.io/...@sha256:...` | Local contra Render falso |
+| Deploy usando la imagen | `cd-deploy.mjs` despliega `ghcr.io/...@sha256:...` (o `render-deploy.mjs --image ...` a mano) | Local contra Render falso |
 | Caché de capas con la caché de Actions | `cache-from/to: type=gha` | Pendiente GitHub (la caché de capas local sí funciona) |
 | `$GITHUB_STEP_SUMMARY` | `cd-deploy.mjs`, `smoke.mjs --summary`, jobs `build`, `test`, `release` | Local (se escribe a fichero) |
 | Badges de staging y producción | `README.md` | Pendiente GitHub |

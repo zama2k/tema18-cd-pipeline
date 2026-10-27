@@ -38,7 +38,8 @@ con contenedores reales y APIs de Render/GitHub/Discord simuladas.
 
 ```
  Pull request ─► CI ─► lint ┐
-                       test ┴─► build ─► (solo PR) job preview ─► Vercel ─► comentario en la PR
+                       test ┤─► build (imagen, sin push)
+                            └─► preview (solo PR del repo) ─► Vercel ─► comentario en la PR
                                   │
  merge a main ─► CI ─► build imagen ─► push a GHCR ─► artefacto image-digest
                                   │                    ghcr.io/<repo>:sha-<sha>  (+ digest)
@@ -183,7 +184,8 @@ rollback y concurrencia en [`docs/operacion.md`](docs/operacion.md).
 .github/CODEOWNERS · dependabot.yml
 src/ · api/ · vercel.json · public/        app Express y adaptador de Vercel
 Dockerfile · .dockerignore                 imagen multi-stage, no root, HEALTHCHECK
-scripts/                                   render-deploy, cd-deploy, health-check, smoke, resolve-image,
+scripts/                                   cd-deploy (lo usan los workflows), render-deploy (CLI manual del mismo
+                                           cliente), health-check, smoke, resolve-image,
                                            deployments, notify-discord, pr-comment, vercel-cleanup,
                                            build-check, setup-github.sh
 scripts/lib/ · scripts/dev/                librerías; servidores falsos, ensayo local, recolector de evidencias
