@@ -4,6 +4,22 @@ import { deployImage } from './render.mjs';
 import { runSmoke, smokeToMarkdown } from './smoke.mjs';
 import { endGroup, group, shortSha } from './util.mjs';
 
+// Log groups must be closed exactly once, also when a step throws half way.
+function groups() {
+  let isOpen = false;
+  return {
+    open(title) {
+      this.close();
+      group(title);
+      isOpen = true;
+    },
+    close() {
+      if (isOpen) endGroup();
+      isOpen = false;
+    },
+  };
+}
+
 // A commit that can never be served: used by `simulate_failure` to exercise
 // the failure and rollback path on demand.
 export const IMPOSSIBLE_COMMIT = '0'.repeat(40);
@@ -36,12 +52,13 @@ export async function runDeploy(opts, deps) {
   } = opts;
   const { api, render, fetchImpl = fetch, sleep, log = console.log } = deps;
   const ref = `${image}@${digest}`;
+  const logGroup = groups();
   const healthOptions = { baseUrl: appUrl, headers, fetchImpl, sleep, log, ...health };
 
-  group('Look up the last good deployment');
+  logGroup.open('Look up the last good deployment');
   const previous = autoRollback ? await findLastGood(api, environment) : null;
   log(previous ? `previous good: ${previous.sha} (${previous.image}@${previous.digest})` : 'no previous good deployment');
-  endGroup();
+  logGroup.close();
 
   const deploymentId = await createDeployment(api, {
     environment,
@@ -56,21 +73,19 @@ export async function runDeploy(opts, deps) {
   const smokeReports = [];
   let failure;
   try {
-    group(`Deploy ${ref} to ${environment}`);
+    logGroup.open(`Deploy ${ref} to ${environment}`);
     await deployImage(render, ref, { expectedDigest: digest, ...renderOptions });
-    endGroup();
 
-    group('Health check');
+    logGroup.open('Health check');
     const expectedCommit = simulateFailure ? IMPOSSIBLE_COMMIT : sha;
     if (simulateFailure) log('simulate_failure is on: the health check expects a commit that cannot exist');
     const healthResult = await checkHealth({ ...healthOptions, expectedCommit });
-    endGroup();
     if (!healthResult.ok) throw new Error(`health check failed: ${healthResult.error}`);
 
-    group('Smoke tests');
+    logGroup.open('Smoke tests');
     const smoke = await runSmoke({ baseUrl: appUrl, mode: smokeMode, headers, fetchImpl });
     for (const r of smoke.results) log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}  (${r.detail})`);
-    endGroup();
+    logGroup.close();
     smokeReports.push(smokeToMarkdown(smoke));
     if (!smoke.ok) throw new Error(`${smoke.results.filter((r) => !r.ok).length} smoke check(s) failed`);
 
@@ -82,7 +97,7 @@ export async function runDeploy(opts, deps) {
     });
     return { result: 'success', deploymentId, previous, smokeReports };
   } catch (err) {
-    endGroup();
+    logGroup.close();
     failure = err.message;
     log(`deployment of ${shortSha(sha)} failed: ${failure}`);
   }
@@ -102,10 +117,10 @@ export async function runDeploy(opts, deps) {
 
   const previousRef = `${previous.image}@${previous.digest}`;
   try {
-    group(`Automatic rollback to ${shortSha(previous.sha)}`);
+    logGroup.open(`Automatic rollback to ${shortSha(previous.sha)}`);
     await deployImage(render, previousRef, { expectedDigest: previous.digest, ...renderOptions });
     const restored = await checkHealth({ ...healthOptions, expectedCommit: previous.sha });
-    endGroup();
+    logGroup.close();
     if (!restored.ok) throw new Error(`health check after rollback failed: ${restored.error}`);
     await setStatus(api, deploymentId, {
       state: 'failure',
@@ -114,7 +129,7 @@ export async function runDeploy(opts, deps) {
     });
     return { result: 'rolled_back', deploymentId, previous, failure, smokeReports };
   } catch (err) {
-    endGroup();
+    logGroup.close();
     await setStatus(api, deploymentId, {
       state: 'failure',
       description: `Failed and the rollback failed too: ${err.message}`,
