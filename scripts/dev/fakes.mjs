@@ -142,9 +142,9 @@ export class FakeGitHub extends FakeServer {
     return new Date(Date.UTC(2026, 0, 1, 0, 0, this.clock)).toISOString();
   }
 
-  seedDeployment({ environment, sha, image = 'ghcr.io/owner/repo', digest, states = ['success'] }) {
+  seedDeployment({ environment, sha, image = 'ghcr.io/owner/repo', digest, states = ['success'], mode }) {
     const id = this.deployments.length + 1;
-    this.deployments.push({ id, sha, task: 'deploy-image', environment, payload: { sha, image, digest }, created_at: this.tick() });
+    this.deployments.push({ id, sha, task: 'deploy-image', environment, payload: { sha, image, digest, ...(mode ? { mode } : {}) }, created_at: this.tick() });
     this.statuses.set(id, states.map((state) => ({ id: this.clock + 1, state, created_at: this.tick() })).reverse());
     return id;
   }

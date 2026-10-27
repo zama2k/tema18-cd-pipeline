@@ -5,7 +5,7 @@
 // Writes found/sha/image/digest/deployment_id to $GITHUB_OUTPUT.
 import { parseArgs } from 'node:util';
 import { GitHubApi } from './lib/github.mjs';
-import { findGoodBySha, findLastGood } from './lib/deployments.mjs';
+import { findGoodBySha, findPromotable } from './lib/deployments.mjs';
 import { fail, isMain, notice, requireEnv, setOutputs } from './lib/util.mjs';
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
@@ -28,15 +28,23 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   requireEnv(env, ['GITHUB_TOKEN', 'GITHUB_REPOSITORY']);
   const api = new GitHubApi({ token: env.GITHUB_TOKEN, repo: env.GITHUB_REPOSITORY, apiUrl: env.GITHUB_API_URL });
 
-  const record =
-    command === 'last-good'
-      ? await findLastGood(api, values.environment)
-      : await findGoodBySha(api, values.environment, values.sha);
+  let record;
+  let hint = '';
+  if (command === 'last-good') {
+    const promotable = await findPromotable(api, values.environment);
+    record = promotable.record;
+    if (promotable.rolledBack) {
+      hint = ` (the environment was rolled back to ${promotable.rolledBack.sha}; pass the sha you want to promote explicitly)`;
+    }
+  } else {
+    record = await findGoodBySha(api, values.environment, values.sha);
+  }
 
   if (!record) {
-    const what = command === 'last-good' ? 'a successful deployment' : `a successful deployment of ${values.sha}`;
-    if (values.require) throw new Error(`No record of ${what} in environment "${values.environment}"`);
-    notice(`No record of ${what} in environment "${values.environment}"`);
+    const what = command === 'last-good' ? 'a promotable deployment' : `a successful deployment of ${values.sha}`;
+    const message = `No record of ${what} in environment "${values.environment}"${hint}`;
+    if (values.require) throw new Error(message);
+    notice(message);
     setOutputs({ found: false, sha: '', image: '', digest: '', deployment_id: '' }, env);
     return null;
   }

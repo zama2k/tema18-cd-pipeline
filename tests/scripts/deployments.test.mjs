@@ -7,6 +7,7 @@ import {
   createDeployment,
   findGoodBySha,
   findLastGood,
+  findPromotable,
   isGood,
   setStatus,
 } from '../../scripts/lib/deployments.mjs';
@@ -35,7 +36,7 @@ test('createDeployment records sha, image and digest in the payload', async () =
   const record = gh.deployments[id - 1];
   assert.equal(record.task, TASK);
   assert.equal(record.environment, 'staging');
-  assert.deepEqual(record.payload, { sha: SHA_A, image: IMAGE, digest: digestOf('1') });
+  assert.deepEqual(record.payload, { sha: SHA_A, image: IMAGE, digest: digestOf('1'), mode: 'deploy' });
   const post = gh.requests.find((r) => r.path.endsWith('/deployments'));
   assert.equal(post.body.auto_merge, false);
   assert.deepEqual(post.body.required_contexts, []);
@@ -81,13 +82,40 @@ test('findLastGood sees through the inactive status GitHub appends to superseded
   assert.equal((await findLastGood(api, 'staging')).sha, SHA_A);
 });
 
-test('findLastGood ignores other environments, foreign tasks and the excluded deployment', async () => {
+test('findLastGood ignores other environments and foreign tasks', async () => {
   gh.seedDeployment({ environment: 'production', sha: SHA_A, digest: digestOf('1') });
-  const own = gh.seedDeployment({ environment: 'staging', sha: SHA_B, digest: digestOf('2') });
+  gh.seedDeployment({ environment: 'staging', sha: SHA_B, digest: digestOf('2') });
   gh.deployments.push({ id: 99, sha: SHA_C, task: 'deploy', environment: 'staging', payload: {}, created_at: gh.tick() });
   gh.statuses.set(99, [{ state: 'success' }]);
   assert.equal((await findLastGood(api, 'staging')).sha, SHA_B);
-  assert.equal(await findLastGood(api, 'staging', { excludeId: own }), null);
+});
+
+test('createDeployment stores the mode so rollbacks can be told apart', async () => {
+  const id = await createDeployment(api, { environment: 'staging', sha: SHA_A, image: IMAGE, digest: digestOf('1'), mode: 'rollback' });
+  assert.equal(gh.deployments[id - 1].payload.mode, 'rollback');
+});
+
+test('a rollback is what the environment runs now (auto-rollback target) but is never promotable', async () => {
+  gh.seedDeployment({ environment: 'staging', sha: SHA_A, digest: digestOf('1') });
+  gh.seedDeployment({ environment: 'staging', sha: SHA_B, digest: digestOf('2') });
+  gh.seedDeployment({ environment: 'staging', sha: SHA_A, digest: digestOf('1'), mode: 'rollback' });
+  assert.equal((await findLastGood(api, 'staging')).sha, SHA_A, 'current state includes the rollback');
+  const promotable = await findPromotable(api, 'staging');
+  assert.equal(promotable.record, null, 'no default candidate after a rollback');
+  assert.equal(promotable.rolledBack.sha, SHA_A);
+});
+
+test('promotion works again after a new regular deployment follows the rollback', async () => {
+  gh.seedDeployment({ environment: 'staging', sha: SHA_A, digest: digestOf('1'), mode: 'rollback' });
+  gh.seedDeployment({ environment: 'staging', sha: SHA_C, digest: digestOf('3') });
+  assert.equal((await findPromotable(api, 'staging')).record.sha, SHA_C);
+});
+
+test('findGoodBySha ignores rollback records: only regular deployments prove a commit passed staging', async () => {
+  gh.seedDeployment({ environment: 'staging', sha: SHA_A, digest: digestOf('1'), mode: 'rollback' });
+  assert.equal(await findGoodBySha(api, 'staging', SHA_A), null);
+  gh.seedDeployment({ environment: 'staging', sha: SHA_A, digest: digestOf('1') });
+  assert.equal((await findGoodBySha(api, 'staging', SHA_A)).sha, SHA_A);
 });
 
 test('findLastGood returns null when there is no history', async () => {
@@ -131,7 +159,16 @@ test('deployments CLI: missing record is reported, or fails with --require', asy
   assert.equal(await main(['by-sha', '--environment', 'staging', '--sha', SHA_A], env), null);
   assert.match(out.read(), /found=false/);
   await assert.rejects(main(['by-sha', '--environment', 'staging', '--sha', SHA_A, '--require'], env), /No record of/);
-  await assert.rejects(main(['last-good', '--environment', 'staging', '--require'], env), /successful deployment/);
+  await assert.rejects(main(['last-good', '--environment', 'staging', '--require'], env), /promotable deployment/);
+});
+
+test('deployments CLI: after a rollback last-good explains that the sha must be given explicitly', async () => {
+  gh.seedDeployment({ environment: 'staging', sha: SHA_A, digest: digestOf('1') });
+  gh.seedDeployment({ environment: 'staging', sha: SHA_B, digest: digestOf('2') });
+  gh.seedDeployment({ environment: 'staging', sha: SHA_A, digest: digestOf('1'), mode: 'rollback' });
+  const env = { GITHUB_TOKEN: 'ghs_token', GITHUB_REPOSITORY: 'owner/repo', GITHUB_API_URL: gh.url };
+  await assert.rejects(main(['last-good', '--environment', 'staging', '--require'], env), /rolled back to a+; pass the sha/);
+  assert.equal((await main(['by-sha', '--environment', 'staging', '--sha', SHA_B, '--require'], env)).sha, SHA_B);
 });
 
 test('deployments CLI validates its arguments', async () => {

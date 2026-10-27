@@ -136,6 +136,24 @@ test('with autoRollback off (manual rollback workflow) a failure is just a failu
   assert.equal(render.requests.filter((r) => r.method === 'POST').length, 1);
 });
 
+test('a manual rollback is recorded with mode "rollback" and a regular deploy with mode "deploy"', async () => {
+  seedGood(SHA_A);
+  const rolled = await runDeploy(options(SHA_A, { autoRollback: false, mode: 'rollback' }), deps());
+  assert.equal(gh.deployments[rolled.deploymentId - 1].payload.mode, 'rollback');
+  const regular = await runDeploy(options(SHA_B), deps());
+  assert.equal(gh.deployments[regular.deploymentId - 1].payload.mode, 'deploy');
+});
+
+test('after a rollback the next failing deploy rolls back to the rolled-back version, not to the one before', async () => {
+  seedGood(SHA_A);
+  seedGood(SHA_B);
+  await runDeploy(options(SHA_A, { autoRollback: false, mode: 'rollback' }), deps());
+  render.onLive = (ref) => app.serve(ref.includes(DIGEST[SHA_A]) ? SHA_A : 'wrong-commit');
+  const outcome = await runDeploy(options(SHA_C), deps());
+  assert.equal(outcome.result, 'rolled_back');
+  assert.equal(outcome.previous.sha, SHA_A);
+});
+
 test('summary lists the outcome, the failure and the smoke tests', async () => {
   seedGood(SHA_A);
   const opts = options(SHA_B, { simulateFailure: true });

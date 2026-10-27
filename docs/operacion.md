@@ -7,7 +7,7 @@
 | Entrada | Obligatoria | Significado |
 | --- | --- | --- |
 | `version` | sí | `vX.Y.Z`. No puede existir ya ese tag. |
-| `sha` | no | Commit completo (40 caracteres). Vacío = la última deployment **correcta** de staging. |
+| `sha` | no | Commit completo (40 caracteres). Vacío = la última deployment **correcta** de staging; tras un rollback de staging no hay valor por defecto y hay que indicarlo (ver abajo). |
 
 1. **Validate** comprueba el formato, que el tag esté libre, que ese commit pasó por staging
    (API de Deployments) y que la imagen `sha-<sha>` existe en GHCR con el **mismo digest** que
@@ -25,6 +25,12 @@
 (`staging`/`production`) y `reason`. Resuelve el tag a su commit, exige que la imagen exista,
 despliega ese digest (producción pide aprobación), verifica `/health.commit` y avisa a Discord.
 Si el propio rollback falla no se intenta otro rollback: necesita una persona.
+
+Los rollbacks se registran en la API de Deployments con `mode: "rollback"`. Sirven para saber qué
+ejecuta el entorno ahora (un deploy posterior que falle volvería a esa versión), pero **nunca**
+se ofrecen como candidato a producción: tras un rollback de staging, `CD Production` sin `sha`
+falla con un mensaje claro (la versión anterior al rollback es la que se descartó y la versión
+restaurada ya tuvo su release). Indica el `sha` explícitamente, o despliega algo nuevo en staging.
 
 ## Qué hace el pipeline cuando algo falla
 

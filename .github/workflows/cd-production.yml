@@ -8,7 +8,7 @@ on:
         type: string
         required: true
       sha:
-        description: "Full commit sha to promote. Empty = last successful staging deployment"
+        description: "Full commit sha to promote. Empty = last successful staging deployment (required after a staging rollback)"
         type: string
         required: false
 

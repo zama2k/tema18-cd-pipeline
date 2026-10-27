@@ -65,6 +65,7 @@ export async function runDeploy(opts, deps) {
     sha,
     image,
     digest,
+    mode,
     defaultBranch,
     description: `${mode === 'rollback' ? 'Rollback to' : 'Deploy'} ${shortSha(sha)}`,
   });
