@@ -169,8 +169,9 @@ jobs:
     steps:
       - name: Create the tag and the release
         run: |
+          # The wait timer is recorded as an approval by github-actions[bot]: only people count.
           approvers=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" \
-            --jq '[.[] | select(.state == "approved") | "@" + .user.login] | unique | join(", ")')
+            --jq '[.[] | select(.state == "approved" and .user.type != "Bot") | "@" + .user.login] | unique | join(", ")')
           {
             echo "## Deployment"
             echo
