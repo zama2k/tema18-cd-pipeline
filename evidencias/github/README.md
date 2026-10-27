@@ -22,6 +22,7 @@ Estado final: producción y staging sirven la versión **1.1.0**, commit `9925d7
 | 8 | Rollback automático **provocado**: `simulate_failure` | [CD Staging 40520189660](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40520189660) | `9925d74` | **failure a propósito** |
 | 9 | Rollback manual de producción a v1.0.0 | [Rollback 40520184940](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40520184940) | `0da3939` | success |
 | 10 | Roll forward de producción a v1.1.0 | [Rollback 40521067970](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40521067970) | `9925d74` | success |
+| 11 | CI y CD Staging del commit de documentación | [CI 40523240793](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40523240793) y [CD Staging 40523439872](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40523439872) | `7deb998` | success; aviso de Discord a las 15:41 |
 
 La PR es la [#1](https://github.com/zama2k/tema18-cd-pipeline/pull/1) (`feat(api): add GET /api/items/:id and release 1.1.0`), mergeada a `main` como `9925d74` con bypass de administrador.
 
@@ -78,6 +79,7 @@ La PR es la [#1](https://github.com/zama2k/tema18-cd-pipeline/pull/1) (`feat(api
 | Hallazgo | Dónde se ve | Corrección |
 |---|---|---|
 | El *wait timer* del environment se registra como aprobación del bot `github-actions[bot]`, y la release v1.0.0 lo listó como aprobador | [v1.0.0](https://github.com/zama2k/tema18-cd-pipeline/releases/tag/v1.0.0): "Approved by @github-actions[bot], @zama2k" | PR #1 filtra `.user.type != "Bot"`; [v1.1.0](https://github.com/zama2k/tema18-cd-pipeline/releases/tag/v1.1.0) dice solo "@zama2k". v1.0.0 se deja como estaba |
+| El primer CD Staging ([40490610273](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40490610273), `4ea3132`) terminó en verde sin desplegar: Render aún no estaba configurado | Aviso «Deploy skipped» de las 11:43 en `#deploys` | Se configuró Render y los CD posteriores desplegaron de verdad. Un verde solo vale si el despliegue y el health check no están *skipped* |
 | Render free tier: arranques lentos y algún deploy colgado | Fila 6 | El pipeline lo trata como fallo y revierte; el reintento funciona |
 | Con un solo usuario nadie puede aprobar la PR | PR #1 | Merge con `gh pr merge --admin` (`enforce_admins` desactivado a propósito) |
 
@@ -88,9 +90,32 @@ La PR es la [#1](https://github.com/zama2k/tema18-cd-pipeline/pull/1) (`feat(api
 | Protección de `main` | Check requerido `CI OK`, rama al día, 1 aprobación, code owners, `enforce_admins` desactivado |
 | Environments | `preview`; `staging` (solo `main`); `production` (revisor obligatorio, espera de 1 min, solo `main`) |
 
+## Recepción en Discord
+
+**VERIFICADO:** recepción confirmada con captura del canal `#deploys` aportada por el autor (servidor `tema18-deploys`, 27-10-2026, hora local de España, UTC+1). La captura no está como fichero en el repositorio: se documenta por transcripción.
+
+Mensajes de este repositorio (bot «CD pipeline»):
+
+| Hora | Título | Datos clave | Corresponde a |
+|---|---|---|---|
+| 11:43 | Deploy skipped - zama2k/tema18-cd-pipeline | «Render is not configured for this environment yet». Entorno staging, estado skipped, commit `4ea3132` | [CD Staging 40490610273](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40490610273) (primer CD, antes de configurar Render) |
+| 12:37 | Deploy succeeded | Staging, success, commit `0da3939` | Fila 2 |
+| 13:01 | Deploy succeeded | Production, success, commit `0da3939`, v1.0.0 | Fila 3 |
+| 13:21 | Deploy failed, automatically rolled back | «Staging was rolled back to 0da3939». Staging, rolled back, commit `9925d74` | Fila 6, intento 1 (el cuelgue de Render) |
+| 13:22 | Deploy succeeded | Staging, success, commit `9925d74` | Fila 6, intento 2 (re-run) |
+| 15:19 | Deploy succeeded | Production, success, commit `9925d74`, v1.1.0 | Fila 7 (el run esperó la aprobación hasta ese momento) |
+| 15:21 | Deploy failed, automatically rolled back | «Staging was rolled back to 9925d74». Rolled back | Fila 8 (`simulate_failure`) |
+| 15:24 | Rollback completed | «production now runs v1.0.0. Reason: Rollback drill…», commit `0da3939` | Fila 9 |
+| 15:29 | Rollback completed | «production now runs v1.1.0. Reason: Roll forward after the drill…», commit `9925d74` | Fila 10 |
+| 15:41 | Deploy succeeded | Staging, success, commit `7deb998` | CD Staging 40523439872 del commit de documentación `7deb998` |
+
+Lo que confirma:
+
+- El aviso «skipped» de las 11:43 prueba que el primer CD en verde **no desplegó** (staging no tenía Render configurado). Los avisos siguientes, ya con Render, son de despliegues reales.
+- Los dos fallos con rollback (13:21 y 15:21) y los dos rollbacks manuales (15:24 y 15:29) produjeron su aviso con el estado correcto.
+
 ## Qué no hemos verificado
 
 | Punto | Estado |
 |---|---|
-| Recepción en Discord | Los jobs `Notify Discord` terminaron en success, pero no hemos visto los mensajes en el canal |
-| Capturas de pantalla | No incluidas |
+| Capturas de pantalla | No incluidas como fichero; la de Discord se transcribe arriba |

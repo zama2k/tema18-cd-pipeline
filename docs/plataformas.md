@@ -137,5 +137,6 @@ cuenta para construir):
   25 campos, 6000 caracteres en total. `color` es un entero.
 - Un `429` se reintenta una vez respetando `retry_after` (el 429 no está en esa página; viene de la
   documentación general de límites de Discord, **sin verificar** aquí). Los avisos reales no
-  devolvieron error, pero no hemos visto su recepción en el canal.
+  devolvieron error y su recepción está verificada con la captura del canal `#deploys` aportada por
+  el autor (ver `evidencias/github/README.md`).
 - La URL del webhook contiene el token: nunca se imprime ni aparece en los mensajes de error.

@@ -33,8 +33,11 @@ enlaces a cada run: [`evidencias/github/README.md`](evidencias/github/README.md)
 Estado final: [producción](https://tema18-cd-pipeline-production.onrender.com/health) y
 [staging](https://tema18-cd-pipeline-staging.onrender.com/health) sirven la **1.1.0** (`9925d74`).
 
-**No verificado por nosotros:** la recepción de los mensajes de Discord. Los jobs `Notify Discord`
-terminaron en success, pero no hemos visto los mensajes en el canal. No hay capturas de pantalla.
+**Discord, verificado:** recepción confirmada con captura del canal `#deploys` aportada por el autor
+(27-10-2026). Llegaron los 10 avisos de este repositorio: éxitos, fallos con rollback y rollbacks
+manuales, además del aviso «Deploy skipped» del primer CD (`4ea3132`), que confirma que aquel
+verde no desplegó. Tabla en [`evidencias/github/`](evidencias/github/README.md#recepción-en-discord).
+La captura no está como fichero: se documenta por transcripción.
 
 Antes de publicar, el repositorio se había verificado en local (salidas en `evidencias/local/`):
 instalación limpia, lint, tests con cobertura y umbral, build, imagen Docker (arranque, `/health`,
@@ -162,7 +165,8 @@ rollback y concurrencia en [`docs/operacion.md`](docs/operacion.md).
 
 ## Limitaciones honestas
 
-- **Discord:** los avisos se enviaron (jobs en success), pero no hemos visto su recepción en el canal.
+- **Discord:** recepción verificada con la captura del canal `#deploys` aportada por el autor. La captura no está como fichero en el repositorio: se transcribe en [`evidencias/github/`](evidencias/github/README.md#recepción-en-discord).
+- **El primer CD Staging no desplegó.** El [CD Staging 40490610273](https://github.com/zama2k/tema18-cd-pipeline/actions/runs/40490610273) (`4ea3132`) terminó en verde antes de configurar Render: se saltó el despliegue y avisó «Deploy skipped - Render is not configured for this environment yet». Un verde del CD solo vale si el despliegue y el health check no están *skipped*.
 - Los clientes de Render, GitHub y Vercel se escribieron leyendo la documentación oficial
   ([`docs/plataformas.md`](docs/plataformas.md)) y la primera ejecución real confirmó los puntos que
   estaban sin verificar: Render acepta `imageUrl` con `@sha256:...`, GitHub acepta un sha como `ref`
