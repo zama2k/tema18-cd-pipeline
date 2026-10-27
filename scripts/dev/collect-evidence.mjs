@@ -11,7 +11,7 @@ const root = resolve(import.meta.dirname, '..', '..');
 const outDir = join(root, 'evidencias', 'local');
 mkdirSync(outDir, { recursive: true });
 
-const ANSI = /\u001b\[[0-9;?]*[A-Za-z]/g;
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, 'g');
 const clean = (text) =>
   text
     .replace(ANSI, '')
