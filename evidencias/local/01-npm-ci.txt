@@ -1,0 +1,10 @@
+$ npm ci
+
+added 448 packages, and audited 449 packages in 7s
+
+102 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+[exit code: 0]

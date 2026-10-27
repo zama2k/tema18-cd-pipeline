@@ -1,0 +1,26 @@
+$ npx jest --coverageThreshold={"global":{"branches":99}}   (the gate must FAIL)
+------------|---------|----------|---------|---------|-------------------
+File        | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+------------|---------|----------|---------|---------|-------------------
+All files   |   97.22 |    94.44 |   94.44 |     100 |                   
+ api        |     100 |      100 |     100 |     100 |                   
+  index.js  |     100 |      100 |     100 |     100 |                   
+ src        |   97.14 |    94.44 |   94.44 |     100 |                   
+  app.js    |     100 |      100 |     100 |     100 |                   
+  server.js |   91.66 |    83.33 |    87.5 |     100 | 24,40             
+------------|---------|----------|---------|---------|-------------------
+
+=============================== Coverage summary ===============================
+Statements   : 97.22% ( 70/72 )
+Branches     : 94.44% ( 34/36 )
+Functions    : 94.44% ( 17/18 )
+Lines        : 100% ( 66/66 )
+================================================================================
+Jest: Coverage for branches (94.44%) does not meet "global" threshold (99%)
+
+Test Suites: 3 passed, 3 total
+Tests:       26 passed, 26 total
+Snapshots:   0 total
+Time:        0.837 s, estimated 1 s
+Ran all test suites.
+[exit code: 1]

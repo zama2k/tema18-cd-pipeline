@@ -15,6 +15,7 @@ const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, 'g');
 const clean = (text) =>
   text
     .replace(ANSI, '')
+    .replaceAll(root.replaceAll('\\', '\\\\'), '<repo>') // JSON-escaped form
     .replaceAll(root, '<repo>')
     .replaceAll(root.replaceAll('\\', '/'), '<repo>')
     .replaceAll(process.env.USERPROFILE || '\u0000', '<home>')
@@ -142,7 +143,6 @@ add(
 );
 
 add(record('10-flujo-cd-local-e2e.txt', ['node scripts/dev/local-e2e.mjs']));
-add(record('11-git-log.txt', ['git log --oneline']));
 
 console.log(failures === 0 ? 'all evidence collected' : `${failures} evidence file(s) with unexpected results`);
 process.exitCode = failures === 0 ? 0 : 1;

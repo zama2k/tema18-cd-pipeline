@@ -1,0 +1,7 @@
+$ docker run --rm -v "<repo>:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
+[exit code: 0]
+
+$ docker run --rm -v "<repo>:/mnt" koalaman/shellcheck:v0.11.0 scripts/setup-github.sh
+
+[exit code: 0]

@@ -1,0 +1,280 @@
+$ node scripts/dev/local-e2e.mjs
+
+=== Building images (real Docker) ===
+built 4 images tagged t18reto-app:*
+
+=== 1. Staging: first deployment (no previous good deployment) ===
+    | ::group::Look up the last good deployment
+    | no previous good deployment
+    | ::endgroup::
+    | ::group::Deploy ghcr.io/owner/repo@sha256:468d019ea81224aeca7ee270b11959d8a187f6f0b6a3febff1c34dc1d66c8d85 to staging
+    | triggered deploy dep-1 for ghcr.io/owner/repo@sha256:468d019ea81224aeca7ee270b11959d8a187f6f0b6a3febff1c34dc1d66c8d85
+    | deploy dep-1: update_in_progress
+    | deploy dep-1: live
+    | ::endgroup::
+    | ::group::Health check
+    | health check passed on attempt 1: commit 1111111111111111111111111111111111111111, version 1.0.0
+    | ::endgroup::
+    | ::group::Smoke tests
+    | PASS  GET / returns 200 with the app name  (ok)
+    | PASS  GET /health returns status ok  (ok)
+    | PASS  GET /api/info returns the commit  (ok)
+    | PASS  GET /api/items returns a list  (ok)
+    | PASS  GET /unknown returns 404  (ok)
+    | PASS  POST /api/items with a valid body returns 201  (ok)
+    | PASS  POST /api/items with an invalid body returns 400  (ok)
+    | ::endgroup::
+    | output result=success
+    | output deployment_id=1
+    | output rolled_back_to=
+OK   staging serves commit 1111111
+
+=== 2. Staging: second deployment ===
+    | ::group::Look up the last good deployment
+    | previous good: 1111111111111111111111111111111111111111 (ghcr.io/owner/repo@sha256:468d019ea81224aeca7ee270b11959d8a187f6f0b6a3febff1c34dc1d66c8d85)
+    | ::endgroup::
+    | ::group::Deploy ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55 to staging
+    | triggered deploy dep-2 for ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55
+    | deploy dep-2: update_in_progress
+    | deploy dep-2: live
+    | ::endgroup::
+    | ::group::Health check
+    | health check passed on attempt 1: commit 2222222222222222222222222222222222222222, version 1.0.0
+    | ::endgroup::
+    | ::group::Smoke tests
+    | PASS  GET / returns 200 with the app name  (ok)
+    | PASS  GET /health returns status ok  (ok)
+    | PASS  GET /api/info returns the commit  (ok)
+    | PASS  GET /api/items returns a list  (ok)
+    | PASS  GET /unknown returns 404  (ok)
+    | PASS  POST /api/items with a valid body returns 201  (ok)
+    | PASS  POST /api/items with an invalid body returns 400  (ok)
+    | ::endgroup::
+    | output result=success
+    | output deployment_id=2
+    | output rolled_back_to=
+OK   staging serves commit 2222222
+
+=== 3. Staging: simulate_failure -> automatic rollback to 2222222 ===
+    | ::group::Look up the last good deployment
+    | previous good: 2222222222222222222222222222222222222222 (ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55)
+    | ::endgroup::
+    | ::group::Deploy ghcr.io/owner/repo@sha256:e69e5e6f3541ea47026a711c50e1b0f79537e2898c0a72af9909c1702821ca6c to staging
+    | triggered deploy dep-3 for ghcr.io/owner/repo@sha256:e69e5e6f3541ea47026a711c50e1b0f79537e2898c0a72af9909c1702821ca6c
+    | deploy dep-3: update_in_progress
+    | deploy dep-3: live
+    | ::endgroup::
+    | ::group::Health check
+    | simulate_failure is on: the health check expects a commit that cannot exist
+    | health check attempt 1/2 failed: commit mismatch: serving 3333333333333333333333333333333333333333, expected 0000000000000000000000000000000000000000
+    | health check attempt 2/2 failed: commit mismatch: serving 3333333333333333333333333333333333333333, expected 0000000000000000000000000000000000000000
+    | ::endgroup::
+    | deployment of 3333333 failed: health check failed: commit mismatch: serving 3333333333333333333333333333333333333333, expected 0000000000000000000000000000000000000000
+    | ::group::Automatic rollback to 2222222
+    | triggered deploy dep-4 for ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55
+    | deploy dep-4: update_in_progress
+    | deploy dep-4: live
+    | health check passed on attempt 1: commit 2222222222222222222222222222222222222222, version 1.0.0
+    | ::endgroup::
+    | output result=rolled_back
+    | output deployment_id=3
+    | output rolled_back_to=2222222222222222222222222222222222222222
+    | ::error::deploy to staging ended as "rolled_back": health check failed: commit mismatch: serving 3333333333333333333333333333333333333333, expected 0000000000000000000000000000000000000000
+OK   job fails with result rolled_back
+OK   staging is back on commit 2222222
+
+=== 4. Staging: REAL failure (image reports another commit) -> automatic rollback ===
+    | ::group::Look up the last good deployment
+    | previous good: 2222222222222222222222222222222222222222 (ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55)
+    | ::endgroup::
+    | ::group::Deploy ghcr.io/owner/repo@sha256:dc476692645bcd6ed93c5f28138be89934857fb393684fc764e6664ee5c78718 to staging
+    | triggered deploy dep-5 for ghcr.io/owner/repo@sha256:dc476692645bcd6ed93c5f28138be89934857fb393684fc764e6664ee5c78718
+    | deploy dep-5: update_in_progress
+    | deploy dep-5: live
+    | ::endgroup::
+    | ::group::Health check
+    | health check attempt 1/6 failed: commit mismatch: serving ffffffffffffffffffffffffffffffffffffffff, expected 4444444444444444444444444444444444444444
+    | health check attempt 2/6 failed: commit mismatch: serving ffffffffffffffffffffffffffffffffffffffff, expected 4444444444444444444444444444444444444444
+    | health check attempt 3/6 failed: commit mismatch: serving ffffffffffffffffffffffffffffffffffffffff, expected 4444444444444444444444444444444444444444
+    | health check attempt 4/6 failed: commit mismatch: serving ffffffffffffffffffffffffffffffffffffffff, expected 4444444444444444444444444444444444444444
+    | health check attempt 5/6 failed: commit mismatch: serving ffffffffffffffffffffffffffffffffffffffff, expected 4444444444444444444444444444444444444444
+    | health check attempt 6/6 failed: commit mismatch: serving ffffffffffffffffffffffffffffffffffffffff, expected 4444444444444444444444444444444444444444
+    | ::endgroup::
+    | deployment of 4444444 failed: health check failed: commit mismatch: serving ffffffffffffffffffffffffffffffffffffffff, expected 4444444444444444444444444444444444444444
+    | ::group::Automatic rollback to 2222222
+    | triggered deploy dep-6 for ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55
+    | deploy dep-6: update_in_progress
+    | deploy dep-6: live
+    | health check passed on attempt 1: commit 2222222222222222222222222222222222222222, version 1.0.0
+    | ::endgroup::
+    | output result=rolled_back
+    | output deployment_id=4
+    | output rolled_back_to=2222222222222222222222222222222222222222
+    | ::error::deploy to staging ended as "rolled_back": health check failed: commit mismatch: serving ffffffffffffffffffffffffffffffffffffffff, expected 4444444444444444444444444444444444444444
+OK   health check detects the commit mismatch
+OK   staging is back on commit 2222222
+
+=== 5. Notification on the failed deploy (embed captured by the fake Discord) ===
+    | Discord notification sent
+OK   Discord embed received: "Deploy failed, automatically rolled back - owner/repo"
+
+=== 6. Production: promote the commit that passed staging (read-only smoke) ===
+    | staging: 2222222222222222222222222222222222222222 -> ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55 (deployment 2)
+    | output found=true
+    | output sha=2222222222222222222222222222222222222222
+    | output image=ghcr.io/owner/repo
+    | output digest=sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55
+    | output deployment_id=2
+OK   last good staging deployment is 2222222
+    | resolved ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55
+    | output image=ghcr.io/owner/repo
+    | output digest=sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55
+    | output ref=ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55
+OK   image sha-2222222 exists in the registry with the staged digest
+    | ::group::Look up the last good deployment
+    | no previous good deployment
+    | ::endgroup::
+    | ::group::Deploy ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55 to production
+    | triggered deploy dep-7 for ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55
+    | deploy dep-7: update_in_progress
+    | deploy dep-7: live
+    | ::endgroup::
+    | ::group::Health check
+    | health check passed on attempt 1: commit 2222222222222222222222222222222222222222, version 1.0.0
+    | ::endgroup::
+    | ::group::Smoke tests
+    | PASS  GET / returns 200 with the app name  (ok)
+    | PASS  GET /health returns status ok  (ok)
+    | PASS  GET /api/info returns the commit  (ok)
+    | PASS  GET /api/items returns a list  (ok)
+    | PASS  GET /unknown returns 404  (ok)
+    | ::endgroup::
+    | output result=success
+    | output deployment_id=5
+    | output rolled_back_to=
+OK   production smoke tests created no data (items 0 -> 0)
+    | ::notice::No record of a successful deployment of 1111111111111111111111111111111111111111 in environment "production"
+    | output found=false
+    | output sha=
+    | output image=
+    | output digest=
+    | output deployment_id=
+OK   a commit that never passed staging/production is not found
+
+=== 7. New version: staging first, then production, then manual rollback to the previous release ===
+    | ::group::Look up the last good deployment
+    | previous good: 2222222222222222222222222222222222222222 (ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55)
+    | ::endgroup::
+    | ::group::Deploy ghcr.io/owner/repo@sha256:e69e5e6f3541ea47026a711c50e1b0f79537e2898c0a72af9909c1702821ca6c to staging
+    | triggered deploy dep-8 for ghcr.io/owner/repo@sha256:e69e5e6f3541ea47026a711c50e1b0f79537e2898c0a72af9909c1702821ca6c
+    | deploy dep-8: update_in_progress
+    | deploy dep-8: live
+    | ::endgroup::
+    | ::group::Health check
+    | health check passed on attempt 1: commit 3333333333333333333333333333333333333333, version 1.0.0
+    | ::endgroup::
+    | ::group::Smoke tests
+    | PASS  GET / returns 200 with the app name  (ok)
+    | PASS  GET /health returns status ok  (ok)
+    | PASS  GET /api/info returns the commit  (ok)
+    | PASS  GET /api/items returns a list  (ok)
+    | PASS  GET /unknown returns 404  (ok)
+    | PASS  POST /api/items with a valid body returns 201  (ok)
+    | PASS  POST /api/items with an invalid body returns 400  (ok)
+    | ::endgroup::
+    | output result=success
+    | output deployment_id=6
+    | output rolled_back_to=
+OK   commit 3333333 passes staging this time
+    | staging: 3333333333333333333333333333333333333333 -> ghcr.io/owner/repo@sha256:e69e5e6f3541ea47026a711c50e1b0f79537e2898c0a72af9909c1702821ca6c (deployment 6)
+    | output found=true
+    | output sha=3333333333333333333333333333333333333333
+    | output image=ghcr.io/owner/repo
+    | output digest=sha256:e69e5e6f3541ea47026a711c50e1b0f79537e2898c0a72af9909c1702821ca6c
+    | output deployment_id=6
+OK   production validation finds 3333333 in the staging history
+    | ::group::Look up the last good deployment
+    | previous good: 2222222222222222222222222222222222222222 (ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55)
+    | ::endgroup::
+    | ::group::Deploy ghcr.io/owner/repo@sha256:e69e5e6f3541ea47026a711c50e1b0f79537e2898c0a72af9909c1702821ca6c to production
+    | triggered deploy dep-9 for ghcr.io/owner/repo@sha256:e69e5e6f3541ea47026a711c50e1b0f79537e2898c0a72af9909c1702821ca6c
+    | deploy dep-9: update_in_progress
+    | deploy dep-9: live
+    | ::endgroup::
+    | ::group::Health check
+    | health check passed on attempt 1: commit 3333333333333333333333333333333333333333, version 1.0.0
+    | ::endgroup::
+    | ::group::Smoke tests
+    | PASS  GET / returns 200 with the app name  (ok)
+    | PASS  GET /health returns status ok  (ok)
+    | PASS  GET /api/info returns the commit  (ok)
+    | PASS  GET /api/items returns a list  (ok)
+    | PASS  GET /unknown returns 404  (ok)
+    | ::endgroup::
+    | output result=success
+    | output deployment_id=7
+    | output rolled_back_to=
+OK   production serves commit 3333333
+    | ::group::Look up the last good deployment
+    | no previous good deployment
+    | ::endgroup::
+    | ::group::Deploy ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55 to production
+    | triggered deploy dep-10 for ghcr.io/owner/repo@sha256:79396ef8980b554cb66116d8c775a13c499189f5681b6d3a2efd2df8990afc55
+    | deploy dep-10: update_in_progress
+    | deploy dep-10: live
+    | ::endgroup::
+    | ::group::Health check
+    | health check passed on attempt 1: commit 2222222222222222222222222222222222222222, version 1.0.0
+    | ::endgroup::
+    | ::group::Smoke tests
+    | PASS  GET / returns 200 with the app name  (ok)
+    | PASS  GET /health returns status ok  (ok)
+    | PASS  GET /api/info returns the commit  (ok)
+    | PASS  GET /api/items returns a list  (ok)
+    | PASS  GET /unknown returns 404  (ok)
+    | ::endgroup::
+    | output result=success
+    | output deployment_id=8
+    | output rolled_back_to=
+OK   rollback restored commit 2222222
+
+=== 8. Deployment history recorded in the (fake) GitHub Deployments API ===
+  #1 staging    1111111 -> in_progress > success > inactive > inactive
+  #2 staging    2222222 -> in_progress > success > inactive
+  #3 staging    3333333 -> in_progress > failure
+  #4 staging    4444444 -> in_progress > failure
+  #5 production 2222222 -> in_progress > success > inactive > inactive
+  #6 staging    3333333 -> in_progress > success
+  #7 production 3333333 -> in_progress > success > inactive
+  #8 production 2222222 -> in_progress > success
+
+=== Step summary written by the last runs ===
+### Deploy to staging succeeded
+
+| | |
+| --- | --- |
+| Environment | staging |
+| Commit | `1111111111111111111111111111111111111111` |
+| Image | `ghcr.io/owner/repo@sha256:468d019ea81224aeca7ee270b11959d8a187f6f0b6a3febff1c34dc1d66c8d85` |
+| URL | http://127.0.0.1:3201 |
+
+#### Smoke tests (full mode)
+
+| Result | Check | Detail |
+| --- | --- | --- |
+| pass | GET / returns 200 with the app name | ok |
+| pass | GET /health returns status ok | ok |
+| pass | GET /api/info returns the commit | ok |
+| pass | GET /api/items returns a list | ok |
+| pass | GET /unknown returns 404 | ok |
+| pass | POST /api/items with a valid body returns 201 | ok |
+| pass | POST /api/items with an invalid body returns 400 | ok |
+### Deploy to staging succeeded
+
+| | |
+| --- | --- |
+
+=== Cleanup (only t18reto-* resources) ===
+
+E2E PASSED
+[exit code: 0]

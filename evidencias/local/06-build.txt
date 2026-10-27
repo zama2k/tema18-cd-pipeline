@@ -1,0 +1,7 @@
+$ npm run build
+
+> tema18-cd-pipeline@1.0.0 build
+> node scripts/build-check.mjs
+
+build ok: 3 runtime file(s) parsed, dependencies verified, app factory loads
+[exit code: 0]

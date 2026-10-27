@@ -1,0 +1,119 @@
+$ docker build -t t18reto-evidence:local --build-arg GIT_SHA=7d3037072fb5f911ba84e9d59d98a877cd1e117c --build-arg APP_VERSION=1.0.0 .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.39kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1
+#2 DONE 0.5s
+
+#3 docker-image://docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#3 resolve docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 175B done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 158B done
+#6 DONE 0.0s
+
+#7 [deps 1/4] FROM docker.io/library/node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
+#7 resolve docker.io/library/node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 0.0s done
+#7 DONE 0.0s
+
+#8 [deps 2/4] WORKDIR /app
+#8 CACHED
+
+#9 [deps 3/4] COPY package.json package-lock.json ./
+#9 CACHED
+
+#10 [deps 4/4] RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev
+#10 CACHED
+
+#11 [runtime 4/5] COPY --chown=node:node package.json ./
+#11 CACHED
+
+#12 [runtime 3/5] COPY --from=deps --chown=node:node /app/node_modules ./node_modules
+#12 CACHED
+
+#13 [runtime 5/5] COPY --chown=node:node src ./src
+#13 CACHED
+
+#14 exporting to image
+#14 exporting layers done
+#14 exporting manifest sha256:30172cb66502680af0a3e0e46727e21e9734e4aaba7ce59b92c209252c26ee8e 0.0s done
+#14 exporting config sha256:e1ef38579e647f97e8e94d92f0f45c26e193f860bd0279d7bd49cf9aa49c4ae0 0.0s done
+#14 exporting attestation manifest sha256:89f73e69f5ce407f6096509860b40a0ef131219c16ad5fc5c9dba27a6ddcb17d
+#14 exporting attestation manifest sha256:89f73e69f5ce407f6096509860b40a0ef131219c16ad5fc5c9dba27a6ddcb17d 0.0s done
+#14 exporting manifest list sha256:22622c90a63b579273d0d8b0a73a25b8827c6e9f35434e1faf766000fb8f6ace 0.0s done
+#14 naming to docker.io/library/t18reto-evidence:local done
+#14 unpacking to docker.io/library/t18reto-evidence:local 0.0s done
+#14 DONE 0.1s
+[exit code: 0]
+
+$ docker image inspect t18reto-evidence:local --format "size={{.Size}} user={{.Config.User}} cmd={{.Config.Cmd}}"
+size=248802935 user=node cmd=[node src/server.js]
+[exit code: 0]
+
+$ docker rm -f t18reto-evidence
+
+[exit code: 0]
+
+$ docker run -d --name t18reto-evidence -p 3201:3000 t18reto-evidence:local
+614688d2bea8505dd98ea15a07c2d24f42edd6f28b25a8f034761a4a046f36ae
+[exit code: 0]
+
+$ curl http://127.0.0.1:3201/health   (after waiting for startup)
+{"status":"ok","version":"1.0.0","commit":"7d3037072fb5f911ba84e9d59d98a877cd1e117c","environment":"production","uptime":3,"startedAt":"2026-10-27T07:15:09.477Z"}
+[exit code: 0]
+
+$ expected commit: 7d3037072fb5f911ba84e9d59d98a877cd1e117c
+
+[exit code: 0]
+
+$ node scripts/health-check.mjs --url http://127.0.0.1:3201 --expected-commit 7d3037072fb5f911ba84e9d59d98a877cd1e117c --attempts 5 --delay 1
+health check passed on attempt 1: commit 7d3037072fb5f911ba84e9d59d98a877cd1e117c, version 1.0.0
+[exit code: 0]
+
+$ node scripts/smoke.mjs --url http://127.0.0.1:3201 --mode full
+PASS  GET / returns 200 with the app name  (ok)
+PASS  GET /health returns status ok  (ok)
+PASS  GET /api/info returns the commit  (ok)
+PASS  GET /api/items returns a list  (ok)
+PASS  GET /unknown returns 404  (ok)
+PASS  POST /api/items with a valid body returns 201  (ok)
+PASS  POST /api/items with an invalid body returns 400  (ok)
+[exit code: 0]
+
+$ node scripts/health-check.mjs ... --expected-commit <wrong sha>   (must FAIL)
+health check attempt 1/2 failed: commit mismatch: serving 7d3037072fb5f911ba84e9d59d98a877cd1e117c, expected 0000000000000000000000000000000000000000
+health check attempt 2/2 failed: commit mismatch: serving 7d3037072fb5f911ba84e9d59d98a877cd1e117c, expected 0000000000000000000000000000000000000000
+::error::Health check failed after 2 attempts: commit mismatch: serving 7d3037072fb5f911ba84e9d59d98a877cd1e117c, expected 0000000000000000000000000000000000000000
+[exit code: 1]
+
+$ docker inspect --format health status (after the HEALTHCHECK start period)
+health=healthy
+[exit code: 0]
+
+$ docker stop t18reto-evidence   (SIGTERM, graceful shutdown)
+t18reto-evidence
+stopped in 1096 ms
+listening on 0.0.0.0:3000
+SIGTERM received, shutting down
+exit code=0
+[exit code: 0]
+
+$ docker rm -f t18reto-evidence
+t18reto-evidence
+[exit code: 0]
+
+$ docker rmi -f t18reto-evidence:local
+Untagged: t18reto-evidence:local
+Deleted: sha256:22622c90a63b579273d0d8b0a73a25b8827c6e9f35434e1faf766000fb8f6ace
+[exit code: 0]

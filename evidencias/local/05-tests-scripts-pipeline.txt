@@ -1,0 +1,311 @@
+$ npm run test:scripts
+
+> tema18-cd-pipeline@1.0.0 test:scripts
+> node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-include="scripts/**/*.mjs" --test-coverage-exclude="scripts/dev/**" "tests/scripts/**/*.test.mjs"
+
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa to staging
+::endgroup::
+::group::Health check
+::endgroup::
+::group::Smoke tests
+::endgroup::
+✔ first deployment: deploys, verifies commit and smoke tests, records success (95.1353ms)
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb to staging
+::endgroup::
+::group::Health check
+::endgroup::
+::group::Smoke tests
+::endgroup::
+✔ a later deployment replaces the previous one and becomes the new last good (42.5962ms)
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb to staging
+::endgroup::
+::group::Health check
+::endgroup::
+::group::Automatic rollback to aaaaaaa
+::endgroup::
+✔ health check failure rolls back to the previous good digest and verifies it (35.2661ms)
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb to staging
+::endgroup::
+::group::Health check
+::endgroup::
+::group::Smoke tests
+::endgroup::
+::group::Automatic rollback to aaaaaaa
+::endgroup::
+✔ smoke test failure also triggers the rollback (28.8877ms)
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb to staging
+::endgroup::
+::group::Automatic rollback to aaaaaaa
+::endgroup::
+✔ a Render deploy failure rolls back too (19.3883ms)
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb to staging
+::endgroup::
+::group::Health check
+::endgroup::
+::group::Automatic rollback to aaaaaaa
+::endgroup::
+✔ simulate_failure forces the failure path and the automatic rollback (20.6132ms)
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb to staging
+::endgroup::
+::group::Health check
+::endgroup::
+✔ without a previous good deployment a failure is reported and nothing is rolled back (19.8112ms)
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb to staging
+::endgroup::
+::group::Health check
+::endgroup::
+::group::Automatic rollback to aaaaaaa
+::endgroup::
+✔ if the rollback itself fails the outcome says so (18.7244ms)
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb to staging
+::endgroup::
+::group::Health check
+::endgroup::
+::group::Automatic rollback to aaaaaaa
+::endgroup::
+✔ rollback target that does not come back healthy is reported as rollback_failed (22.9843ms)
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb to staging
+::endgroup::
+::group::Health check
+::endgroup::
+✔ with autoRollback off (manual rollback workflow) a failure is just a failure (16.672ms)
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb to staging
+::endgroup::
+::group::Health check
+::endgroup::
+::group::Automatic rollback to aaaaaaa
+::endgroup::
+::group::Look up the last good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa to staging
+::endgroup::
+::group::Health check
+::endgroup::
+::group::Smoke tests
+::endgroup::
+✔ summary lists the outcome, the failure and the smoke tests (35.1802ms)
+::group::Look up the last good deployment
+no previous good deployment
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa to staging
+triggered deploy dep-1 for ghcr.io/owner/repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+deploy dep-1: live
+::endgroup::
+::group::Health check
+health check passed on attempt 1: commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, version 1.0.0
+::endgroup::
+::group::Smoke tests
+PASS  GET / returns 200 with the app name  (ok)
+PASS  GET /health returns status ok  (ok)
+PASS  GET /api/info returns the commit  (ok)
+PASS  GET /api/items returns a list  (ok)
+PASS  GET /unknown returns 404  (ok)
+PASS  POST /api/items with a valid body returns 201  (ok)
+PASS  POST /api/items with an invalid body returns 400  (ok)
+::endgroup::
+✔ CLI: success writes outputs and the step summary (28.7529ms)
+::group::Look up the last good deployment
+previous good: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (ghcr.io/owner/repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+::endgroup::
+::group::Deploy ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb to staging
+triggered deploy dep-1 for ghcr.io/owner/repo@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+deploy dep-1: live
+::endgroup::
+::group::Health check
+simulate_failure is on: the health check expects a commit that cannot exist
+health check attempt 1/2 failed: commit mismatch: serving bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, expected 0000000000000000000000000000000000000000
+health check attempt 2/2 failed: commit mismatch: serving bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, expected 0000000000000000000000000000000000000000
+::endgroup::
+deployment of bbbbbbb failed: health check failed: commit mismatch: serving bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, expected 0000000000000000000000000000000000000000
+::group::Automatic rollback to aaaaaaa
+triggered deploy dep-2 for ghcr.io/owner/repo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+deploy dep-2: live
+health check passed on attempt 1: commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, version 1.0.0
+::endgroup::
+::error::deploy to staging ended as "rolled_back": health check failed: commit mismatch: serving bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, expected 0000000000000000000000000000000000000000
+✔ CLI: --simulate-failure rolls back and exits non-zero (1032.3651ms)
+::notice::RENDER_API_KEY, RENDER_SERVICE_ID or APP_URL is not configured for this environment: skipping the deploy
+✔ CLI: skips with a notice when Render is not configured (5.4297ms)
+✔ CLI: validates its arguments (3.8434ms)
+✔ isGood: success without a later failure, even if superseded by inactive (25.3995ms)
+✔ createDeployment records sha, image and digest in the payload (23.5256ms)
+✔ createDeployment marks production deployments as production (6.3888ms)
+✔ createDeployment falls back to the default branch when a sha ref is rejected (7.952ms)
+✔ createDeployment propagates other errors (7.6634ms)
+✔ setStatus posts state, description and URLs (10.9853ms)
+✔ findLastGood returns the newest good deployment and skips failed ones (12.8328ms)
+✔ findLastGood sees through the inactive status GitHub appends to superseded deployments (8.6947ms)
+✔ findLastGood ignores other environments, foreign tasks and the excluded deployment (10.8941ms)
+✔ findLastGood returns null when there is no history (4.8161ms)
+✔ findGoodBySha finds a record by the sha in its payload, not by the git ref (9.3361ms)
+✔ findGoodBySha refuses a sha that only ever failed in that environment (8.7942ms)
+✔ paginates through more than one page of deployments (9.9274ms)
+staging: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -> ghcr.io/owner/repo@sha256:1111111111111111111111111111111111111111111111111111111111111111 (deployment 1)
+✔ deployments CLI: last-good writes outputs (9.9863ms)
+::notice::No record of a successful deployment of aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa in environment "staging"
+✔ deployments CLI: missing record is reported, or fails with --require (13.0211ms)
+✔ deployments CLI validates its arguments (1.7537ms)
+✔ GitHubApi validates token and repository (1.0474ms)
+✔ health check passes when the expected commit is served (25.8067ms)
+✔ health check fails when a different commit keeps being served (8.039ms)
+✔ health check retries until the new commit shows up (rollout in progress) (6.3644ms)
+✔ health check reports HTTP errors and connection failures (5.3448ms)
+✔ health check reports a timeout (25.3076ms)
+✔ health check rejects a body whose status is not ok (0.8074ms)
+health check passed on attempt 1: commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, version 1.0.0
+health check attempt 1/1 failed: commit mismatch: serving aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, expected bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+✔ health-check CLI throws on failure and returns the result on success (4.3892ms)
+✔ smoke full mode exercises reads and writes (20.1352ms)
+✔ smoke readonly mode never writes (7.7862ms)
+✔ smoke tests fail when the service is down and name the failing checks (5.3277ms)
+✔ smoke tests report connection errors per check (0.4755ms)
+✔ smoke tests send the extra headers (0.3665ms)
+✔ parseHeaders reads Name: value lines and ignores junk (0.8614ms)
+PASS  GET / returns 200 with the app name  (ok)
+PASS  GET /health returns status ok  (ok)
+PASS  GET /api/info returns the commit  (ok)
+PASS  GET /api/items returns a list  (ok)
+PASS  GET /unknown returns 404  (ok)
+FAIL  GET / returns 200 with the app name  (unexpected response (HTTP 503))
+FAIL  GET /health returns status ok  (unexpected response (HTTP 503))
+FAIL  GET /api/info returns the commit  (unexpected response (HTTP 503))
+FAIL  GET /api/items returns a list  (unexpected response (HTTP 503))
+FAIL  GET /unknown returns 404  (unexpected response (HTTP 503))
+✔ smoke CLI writes the step summary and fails on errors (15.8954ms)
+✔ splitImage separates host and repository (29.4975ms)
+✔ resolves the digest from the sha tag (24.6746ms)
+✔ fails clearly when the sha tag does not exist (10.8396ms)
+✔ a known digest is verified against the registry (22.9446ms)
+✔ strict tag mode requires the sha tag to exist and to match the digest (32.0544ms)
+::warning::Tag sha-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb now points to sha256:9999999999999999999999999999999999999999999999999999999999999999; using sha256:2222222222222222222222222222222222222222222222222222222222222222 from the CI run that built it
+✔ a moved tag only warns: the digest built by the CI run wins (11.5827ms)
+✔ registry errors name the repository, not the credentials (4.9397ms)
+resolved ghcr.io/owner/repo@sha256:1111111111111111111111111111111111111111111111111111111111111111
+✔ CLI reads the digest from the artifact file and writes outputs (15.6688ms)
+✔ CLI refuses a digest file that belongs to another commit (4.1647ms)
+✔ requiredPackages ignores relative paths, node builtins and returns package roots (1.1962ms)
+✔ build passes on the real project (116.8748ms)
+✔ build rejects a runtime package that is not a production dependency (44.8602ms)
+✔ build rejects syntax errors and factories that do not return a handler (82.5915ms)
+✔ payload has the expected embed for each status and never allows mentions (27.1638ms)
+✔ unknown statuses are reported as failures and long text is clipped to Discord limits (2.0202ms)
+✔ sendWebhook retries once after a 429 (26.1187ms)
+✔ sendWebhook errors do not include the webhook URL (9.9838ms)
+✔ sendWebhook gives up when rate limited twice (3.2845ms)
+Discord notification sent
+✔ CLI posts an embed with the run link (7.7321ms)
+✔ CLI skips with a notice when the webhook is not configured (2.0209ms)
+✔ CLI never throws when Discord is down; it only warns (7.3789ms)
+✔ CLI requires --status (2.0018ms)
+✔ previewBody contains the marker, URL, short sha, branch and run link (25.2633ms)
+✔ upsertComment creates once and then edits the same comment (35.4097ms)
+✔ upsertComment leaves other comments alone and does not confuse PRs (17.6605ms)
+✔ removed mode edits the sticky comment but never creates one (14.6599ms)
+PR #5 comment: created
+PR #5 comment: updated
+PR #5 comment: updated
+✔ comment CLI posts the preview, then edits it, then marks it removed (16.7206ms)
+✔ comment CLI validates arguments (3.9553ms)
+✔ removePreviews deletes only the deployments of that PR, across pages (15.6805ms)
+✔ removePreviews is a no-op when the PR has no deployments and sends the team id (6.6954ms)
+✔ a deployment that is already gone does not fail the cleanup (4.9382ms)
+✔ Vercel API errors are surfaced without the token (4.8778ms)
+removed deployment dpl_a (dpl_a.vercel.app)
+removed 1 preview deployment(s) for PR #3
+::notice::VERCEL_TOKEN or VERCEL_PROJECT_ID is not configured: skipping the Vercel cleanup
+✔ cleanup CLI removes previews, and skips when Vercel is not configured (11.8647ms)
+✔ deploys an image reference and waits until the deploy is live (49.6246ms)
+✔ fails when Render ends the deploy in a failed status (17.2865ms)
+✔ fails with a timeout when the deploy never becomes live (28.2091ms)
+✔ fails when Render reports a different digest than requested (10.5815ms)
+✔ retries on 429 honouring Retry-After (12.1961ms)
+✔ looks up the newest deploy when Render answers 202 without a body (11.1007ms)
+✔ reports API errors without leaking the API key (5.379ms)
+::notice::RENDER_API_KEY or RENDER_SERVICE_ID is not configured: skipping the Render deploy
+✔ gives up after repeated server errors (2.528ms)
+✔ constructor validates its inputs (1.2051ms)
+✔ CLI skips with a notice when the Render secrets are missing (4.8825ms)
+triggered deploy dep-1 for ghcr.io/owner/repo@sha256:1111111111111111111111111111111111111111111111111111111111111111
+deploy dep-1: update_in_progress
+deploy dep-1: live
+✔ CLI deploys and writes outputs (12.6862ms)
+✔ CLI requires --image (1.9331ms)
+✔ configures environments, variables, token defaults and branch protection (690.8675ms)
+✔ production gets the authenticated user as required reviewer and a 1 minute wait timer (558.1788ms)
+✔ the wait timer is configurable and validated (578.2734ms)
+✔ restricts staging and production deployments to main, once (idempotent) (1036.3826ms)
+✔ variables without a value are reported, not set to empty strings (560.1809ms)
+✔ discovers the repository when none is given and rejects malformed names (598.4724ms)
+✔ prints the secrets to create but never creates them (551.6132ms)
+✔ DRY_RUN prints the calls without executing them (260.0282ms)
+✔ backoffDelay grows exponentially and is capped (0.6821ms)
+✔ shortSha trims to 7 characters and tolerates empty input (0.0985ms)
+✔ setOutputs appends key=value lines to GITHUB_OUTPUT (2.386ms)
+✔ setOutputs prints the values when GITHUB_OUTPUT is not set (0.7461ms)
+✔ appendSummary writes to GITHUB_STEP_SUMMARY only when it exists (2.2405ms)
+✔ requireEnv lists every missing variable (0.5021ms)
+✔ httpJson parses JSON, tolerates non-JSON bodies and never throws on HTTP errors (3.1514ms)
+✔ httpJson sends a JSON body with a content-type header (0.3175ms)
+✔ ApiError carries status and data (0.1334ms)
+ℹ tests 108
+ℹ suites 0
+ℹ pass 108
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4934.4186
+ℹ start of coverage report
+ℹ ---------------------------------------------------------------------
+ℹ file                 | line % | branch % | funcs % | uncovered lines
+ℹ ---------------------------------------------------------------------
+ℹ scripts              |        |          |         | 
+ℹ  build-check.mjs     |  89.23 |    92.31 |  100.00 | 59-65
+ℹ  cd-deploy.mjs       |  97.80 |    83.33 |   50.00 | 90-91
+ℹ  deployments.mjs     |  96.00 |    88.89 |   50.00 | 49-50
+ℹ  health-check.mjs    |  94.44 |    83.33 |   50.00 | 35-36
+ℹ  lib                 |        |          |         | 
+ℹ   cd-deploy.mjs      | 100.00 |    95.24 |  100.00 | 
+ℹ   deployments.mjs    |  92.63 |    78.79 |   92.86 | 61-67
+ℹ   discord.mjs        | 100.00 |   100.00 |   80.00 | 
+ℹ   github.mjs         | 100.00 |    93.75 |  100.00 | 
+ℹ   health.mjs         | 100.00 |   100.00 |  100.00 | 
+ℹ   pr-comment.mjs     | 100.00 |   100.00 |  100.00 | 
+ℹ   registry.mjs       |  96.67 |    86.36 |  100.00 | 51-52
+ℹ   render.mjs         | 100.00 |    88.64 |  100.00 | 
+ℹ   smoke.mjs          | 100.00 |   100.00 |  100.00 | 
+ℹ   util.mjs           |  96.30 |   100.00 |   94.74 | 79-81
+ℹ   vercel.mjs         | 100.00 |   100.00 |  100.00 | 
+ℹ  notify-discord.mjs  |  92.31 |    91.67 |   50.00 | 49-52
+ℹ  pr-comment.mjs      |  95.92 |    87.50 |   50.00 | 48-49
+ℹ  render-deploy.mjs   |  95.24 |    77.78 |   50.00 | 41-42
+ℹ  resolve-image.mjs   |  97.18 |    95.83 |   66.67 | 70-71
+ℹ  smoke.mjs           |  93.33 |    92.31 |   66.67 | 29-30
+ℹ  vercel-cleanup.mjs  |  93.55 |    75.00 |   50.00 | 30-31
+ℹ ---------------------------------------------------------------------
+ℹ all files            |  97.17 |    92.11 |   89.47 | 
+ℹ ---------------------------------------------------------------------
+ℹ end of coverage report
+[exit code: 0]

@@ -1,0 +1,5 @@
+$ npm run lint
+
+> tema18-cd-pipeline@1.0.0 lint
+> eslint .
+[exit code: 0]
