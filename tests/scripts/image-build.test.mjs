@@ -47,6 +47,13 @@ test('a known digest is verified against the registry', async () => {
   await assert.rejects(resolveImage({ image: IMAGE, sha: SHA_A, digest: 'nope', registry: client() }), /not a sha256 digest/);
 });
 
+test('strict tag mode requires the sha tag to exist and to match the digest', async () => {
+  const strict = (sha, digest) => resolveImage({ image: IMAGE, sha, digest, registry: client(), strictTag: true });
+  assert.equal((await strict(SHA_A, digestOf('1'))).digest, digestOf('1'));
+  await assert.rejects(strict(SHA_B, digestOf('2')), /rebuilt after it was verified/);
+  await assert.rejects(strict('c'.repeat(40), digestOf('2')), /does not exist/);
+});
+
 test('a moved tag only warns: the digest built by the CI run wins', async () => {
   const resolved = await resolveImage({ image: IMAGE, sha: SHA_B, digest: digestOf('2'), registry: client() });
   assert.equal(resolved.digest, digestOf('2'));

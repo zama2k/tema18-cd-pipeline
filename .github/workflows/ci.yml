@@ -1,0 +1,324 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# PR runs are superseded by newer pushes. Runs on main are never cancelled:
+# every merged commit must get its image so it can be deployed.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: "24"
+  VERCEL_CLI_VERSION: "65.4.0"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Lint workflows (actionlint)
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
+      - name: Lint shell scripts (shellcheck)
+        run: docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.11.0 scripts/*.sh
+
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests with coverage threshold (app and pipeline scripts)
+        run: npm run test:ci
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            {
+              echo "### Coverage (app)"
+              echo
+              node -e "const t=require('./coverage/coverage-summary.json').total;console.log('| Metric | Covered |\n| --- | --- |');for(const k of ['statements','branches','functions','lines'])console.log('| '+k+' | '+t[k].pct+'% |')"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  build:
+    name: Build image
+    needs: [lint, test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write # push to GHCR (main only; read-only on fork PRs)
+    outputs:
+      image: ${{ steps.vars.outputs.image }}
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies and run the build check
+        run: |
+          npm ci
+          npm run build
+
+      - name: Compute image name and version
+        id: vars
+        run: |
+          # GHCR requires a lowercase repository path.
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Image metadata (tags and OCI labels)
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.vars.outputs.image }}
+          flavor: latest=false
+          tags: |
+            type=sha,format=long
+            type=raw,value=main
+
+      # Step 1: build into the local daemon, never into the registry. The
+      # layer cache lives in the GitHub Actions cache (type=gha).
+      - name: Build image (local, cached)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          push: false
+          provenance: false
+          tags: app:candidate
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            APP_VERSION=${{ steps.vars.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start the container
+        run: docker run -d --name app -p 3000:3000 app:candidate
+
+      - name: Health check (the container must report this commit)
+        run: node scripts/health-check.mjs --url http://127.0.0.1:3000 --expected-commit "$GITHUB_SHA" --attempts 10 --delay 1
+
+      - name: Smoke tests against the container
+        run: node scripts/smoke.mjs --url http://127.0.0.1:3000 --mode full --summary
+
+      - name: Container logs
+        if: failure()
+        run: docker logs app
+
+      - name: Stop the container
+        if: always()
+        run: docker rm -f app
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 2: only on main. All layers come from the cache of step 1, so this
+      # is a re-export plus a push, not a second build.
+      - name: Push image to GHCR
+        id: push
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          provenance: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            APP_VERSION=${{ steps.vars.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Record the immutable image digest
+        if: steps.push.outputs.digest != ''
+        env:
+          IMAGE: ${{ steps.vars.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          jq -n --arg sha "$GITHUB_SHA" --arg image "$IMAGE" --arg digest "$DIGEST" \
+            '{sha: $sha, image: $image, digest: $digest}' > image-digest.json
+          cat image-digest.json
+          {
+            echo "### Image published"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Image | \`$IMAGE\` |"
+            echo "| Digest | \`$DIGEST\` |"
+            echo "| Commit | \`$GITHUB_SHA\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload image digest
+        if: steps.push.outputs.digest != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-digest
+          path: image-digest.json
+          retention-days: 14
+          if-no-files-found: error
+
+  preview:
+    name: Vercel preview
+    needs: [lint, test]
+    # Never for forks: they cannot read secrets and must not run with them.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write # sticky preview comment
+    environment:
+      name: preview
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Check Vercel configuration
+        id: cfg
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::notice::VERCEL_TOKEN, VERCEL_ORG_ID or VERCEL_PROJECT_ID is not configured: skipping the preview deployment (see docs/setup.md)"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy preview to Vercel
+        id: deploy
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          vercel() { npx --yes "vercel@${VERCEL_CLI_VERSION}" "$@"; }
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          vercel build --token="$VERCEL_TOKEN"
+          url=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" \
+            --meta githubPrId="$PR_NUMBER" --meta githubCommitSha="$HEAD_SHA")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Preview: $url"
+
+      - name: Smoke-test the preview
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+          BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          if [ -z "$BYPASS_SECRET" ]; then
+            echo "::notice::VERCEL_AUTOMATION_BYPASS_SECRET is not configured: skipping the preview smoke test (Deployment Protection would answer 401)"
+            exit 0
+          fi
+          export SMOKE_HEADERS="x-vercel-protection-bypass: $BYPASS_SECRET"
+          node scripts/health-check.mjs --url "$PREVIEW_URL" --attempts 6 --delay 3
+          node scripts/smoke.mjs --url "$PREVIEW_URL" --mode full --summary
+
+      - name: Comment the preview URL on the pull request
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+        run: node scripts/pr-comment.mjs preview --pr "$PR_NUMBER" --url "$PREVIEW_URL" --sha "$HEAD_SHA" --branch "$HEAD_REF"
+
+  # One stable name for branch protection: it also succeeds when optional jobs
+  # (the preview) are skipped, and it fails if any needed job failed or was
+  # cancelled.
+  ci-ok:
+    name: CI OK
+    if: always()
+    needs: [lint, test, build, preview]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify the results of all jobs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if echo "$NEEDS" | jq -e 'to_entries | any(.value.result == "failure" or .value.result == "cancelled")' > /dev/null; then
+            echo "::error::At least one required job failed or was cancelled"
+            exit 1
+          fi

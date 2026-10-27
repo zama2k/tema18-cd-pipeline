@@ -1,0 +1,187 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing release tag to restore, format vX.Y.Z"
+        type: string
+        required: true
+      environment:
+        description: "Environment to roll back"
+        type: choice
+        options: [staging, production]
+        default: production
+        required: true
+      reason:
+        description: "Why is this rollback needed? (shown in the run and in Discord)"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# Same group as the CD workflows of that environment: a rollback and a deploy
+# can never run at the same time.
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+  prepare:
+    name: Resolve version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read # check the image in GHCR
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    outputs:
+      sha: ${{ steps.tag.outputs.sha }}
+      image: ${{ steps.image.outputs.image }}
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - name: Only main can run a rollback
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Rollback can only be dispatched from main"
+          exit 1
+
+      - name: Checkout tooling from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Resolve the tag to a commit
+        id: tag
+        run: |
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must look like v1.2.3, got '$VERSION'"
+            exit 1
+          fi
+          if ! ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" 2> /dev/null); then
+            echo "::error::the tag $VERSION does not exist"
+            exit 1
+          fi
+          type=$(jq -r .object.type <<< "$ref")
+          sha=$(jq -r .object.sha <<< "$ref")
+          if [ "$type" = "tag" ]; then
+            # Annotated tag: follow it to the commit.
+            sha=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq .object.sha)
+          fi
+          echo "$VERSION -> $sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve and verify the image in GHCR
+        id: image
+        env:
+          SHA: ${{ steps.tag.outputs.sha }}
+        run: node scripts/resolve-image.mjs --image "ghcr.io/${GITHUB_REPOSITORY,,}" --sha "$SHA"
+
+  rollback:
+    name: Roll back ${{ inputs.environment }}
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      deployments: write
+    # production asks for approval here, like a normal production deploy.
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.APP_URL }}
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
+      APP_URL: ${{ vars.APP_URL }}
+    outputs:
+      result: ${{ steps.deploy.outputs.result }}
+      url: ${{ vars.APP_URL }}
+    steps:
+      - name: Checkout tooling from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Deploy the old version and verify it
+        id: deploy
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          VERSION: ${{ inputs.version }}
+          REASON: ${{ inputs.reason }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          IMAGE: ${{ needs.prepare.outputs.image }}
+          DIGEST: ${{ needs.prepare.outputs.digest }}
+        run: |
+          {
+            echo "### Rollback of $ENVIRONMENT to $VERSION"
+            echo
+            echo "Reason: $REASON"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          smoke="full"
+          if [ "$ENVIRONMENT" = "production" ]; then
+            smoke="readonly"
+          fi
+          # No automatic rollback of a rollback: a failure here needs a human.
+          node scripts/cd-deploy.mjs --mode rollback --no-auto-rollback --smoke-mode "$smoke" \
+            --environment "$ENVIRONMENT" --sha "$SHA" --image "$IMAGE" --digest "$DIGEST"
+
+  notify:
+    name: Notify Discord
+    needs: [prepare, rollback]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout tooling from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Send the notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          VERSION: ${{ inputs.version }}
+          REASON: ${{ inputs.reason }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          APP_URL: ${{ needs.rollback.outputs.url }}
+          ROLLBACK_RESULT: ${{ needs.rollback.result }}
+          ROLLBACK_OUTCOME: ${{ needs.rollback.outputs.result }}
+        run: |
+          status=failure
+          detail="Rollback to $VERSION failed. Reason given: $REASON"
+          if [ "$ROLLBACK_OUTCOME" = "skipped" ]; then
+            status=skipped
+            detail="Render is not configured for $ENVIRONMENT yet."
+          elif [ "$ROLLBACK_RESULT" = "success" ]; then
+            status=rollback
+            detail="$ENVIRONMENT now runs $VERSION. Reason: $REASON"
+          fi
+          node scripts/notify-discord.mjs --status "$status" --environment "$ENVIRONMENT" \
+            --sha "${SHA:-$GITHUB_SHA}" --version "$VERSION" --url "$APP_URL" --detail "$detail"

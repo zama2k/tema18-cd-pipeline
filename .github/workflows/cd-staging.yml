@@ -1,0 +1,204 @@
+name: CD Staging
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: "Make the health check fail on purpose to demonstrate the automatic rollback"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One staging deploy at a time and never cancel one that is running. GitHub
+# keeps at most ONE pending run per group: when several commits queue up, the
+# older pending runs are cancelled and only the newest one is deployed next.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+  prepare:
+    name: Prepare
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read # download the artifact of the CI run that triggered this one
+      packages: read # check that the image exists in GHCR
+    env:
+      # The commit that PASSED CI. github.sha would be the current head of main.
+      TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    outputs:
+      sha: ${{ env.TARGET_SHA }}
+      superseded: ${{ steps.latest.outputs.superseded }}
+      image: ${{ steps.image.outputs.image }}
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - name: Only main can be deployed manually
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::CD Staging can only be dispatched from main"
+          exit 1
+
+      # Runs finish out of order. If main already moved on, this commit is
+      # stale: the newer commit has its own run, and deploying the old one
+      # last would leave staging behind.
+      - name: Skip commits that are no longer the tip of main
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          superseded=false
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            latest=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+            if [ "$latest" != "$TARGET_SHA" ]; then
+              superseded=true
+              echo "::notice::$TARGET_SHA is no longer the tip of main ($latest); its successor deploys instead"
+              echo "### Skipped: superseded by \`$latest\`" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "superseded=$superseded" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the commit that passed CI
+        if: steps.latest.outputs.superseded != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        if: steps.latest.outputs.superseded != 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download the image digest published by CI
+        if: steps.latest.outputs.superseded != 'true' && github.event_name == 'workflow_run'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-digest
+          path: image-digest
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Resolve and verify the image
+        id: image
+        if: steps.latest.outputs.superseded != 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          args=(--image "ghcr.io/${GITHUB_REPOSITORY,,}" --sha "$TARGET_SHA")
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            args+=(--digest-file image-digest/image-digest.json)
+          fi
+          node scripts/resolve-image.mjs "${args[@]}"
+
+  deploy-staging:
+    name: Deploy to staging
+    needs: prepare
+    if: needs.prepare.outputs.superseded != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      deployments: write # deployment history used to find the last good digest
+    environment:
+      name: staging
+      url: ${{ vars.APP_URL }}
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
+      APP_URL: ${{ vars.APP_URL }}
+    outputs:
+      result: ${{ steps.deploy.outputs.result }}
+      rolled_back_to: ${{ steps.deploy.outputs.rolled_back_to }}
+      url: ${{ vars.APP_URL }}
+    steps:
+      - name: Checkout the commit that passed CI
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Deploys the digest, requires /health.commit == sha, runs the smoke
+      # tests and, if anything fails, redeploys the last good digest.
+      - name: Deploy, verify and roll back on failure
+        id: deploy
+        env:
+          SHA: ${{ needs.prepare.outputs.sha }}
+          IMAGE: ${{ needs.prepare.outputs.image }}
+          DIGEST: ${{ needs.prepare.outputs.digest }}
+          SIMULATE_FAILURE: ${{ inputs.simulate_failure }}
+        run: |
+          args=(--environment staging --sha "$SHA" --image "$IMAGE" --digest "$DIGEST" --smoke-mode full)
+          if [ "$SIMULATE_FAILURE" = "true" ]; then
+            args+=(--simulate-failure)
+          fi
+          node scripts/cd-deploy.mjs "${args[@]}"
+
+  notify:
+    name: Notify Discord
+    needs: [prepare, deploy-staging]
+    if: always() && needs.prepare.result != 'skipped' && needs.prepare.outputs.superseded != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Send the notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          DEPLOY_RESULT: ${{ needs.deploy-staging.result }}
+          DEPLOY_OUTCOME: ${{ needs.deploy-staging.outputs.result }}
+          ROLLED_BACK_TO: ${{ needs.deploy-staging.outputs.rolled_back_to }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          APP_URL: ${{ needs.deploy-staging.outputs.url }}
+        run: |
+          status=failure
+          detail="The deployment did not complete. See the run for details."
+          if [ "$PREPARE_RESULT" != "success" ]; then
+            detail="The image for this commit could not be verified, nothing was deployed."
+          elif [ "$DEPLOY_OUTCOME" = "skipped" ]; then
+            status=skipped
+            detail="Render is not configured for this environment yet."
+          elif [ "$DEPLOY_RESULT" = "success" ]; then
+            status=success
+            detail="Deployed by digest and verified: /health reports this commit and the smoke tests pass."
+          elif [ "$DEPLOY_OUTCOME" = "rolled_back" ]; then
+            status=rolled_back
+            detail="The new version failed verification. Staging was rolled back to ${ROLLED_BACK_TO:0:7}."
+          fi
+          node scripts/notify-discord.mjs --status "$status" --environment staging \
+            --sha "${SHA:-$GITHUB_SHA}" --url "$APP_URL" --detail "$detail"

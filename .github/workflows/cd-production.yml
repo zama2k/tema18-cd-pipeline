@@ -1,0 +1,242 @@
+name: CD Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, format vX.Y.Z (the tag must not exist yet)"
+        type: string
+        required: true
+      sha:
+        description: "Full commit sha to promote. Empty = last successful staging deployment"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+# One production deploy at a time. A run waiting for approval keeps the lock;
+# a newer pending run replaces an older pending one (GitHub keeps one).
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      deployments: read # find the staging deployment of the sha
+      packages: read # check the image in GHCR
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      INPUT_SHA: ${{ inputs.sha }}
+    outputs:
+      sha: ${{ steps.staging.outputs.sha }}
+      image: ${{ steps.staging.outputs.image }}
+      digest: ${{ steps.staging.outputs.digest }}
+    steps:
+      - name: Only main can be released
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::CD Production can only be dispatched from main"
+          exit 1
+
+      - name: Checkout tooling from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate the version format and that the tag is free
+        run: |
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must look like v1.2.3, got '$VERSION'"
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$VERSION" \
+            | jq -e --arg ref "refs/tags/$VERSION" 'any(.[]; .ref == $ref)' > /dev/null; then
+            echo "::error::the tag $VERSION already exists"
+            exit 1
+          fi
+
+      # Only a commit that was deployed AND verified in staging can go to
+      # production. The Deployments API is the source of truth.
+      - name: Resolve the commit that passed staging
+        id: staging
+        run: |
+          if [ -n "$INPUT_SHA" ]; then
+            node scripts/deployments.mjs by-sha --environment staging --sha "$INPUT_SHA" --require
+          else
+            node scripts/deployments.mjs last-good --environment staging --require
+          fi
+
+      - name: Verify the image exists in GHCR and is the one staging ran
+        env:
+          SHA: ${{ steps.staging.outputs.sha }}
+          IMAGE: ${{ steps.staging.outputs.image }}
+          DIGEST: ${{ steps.staging.outputs.digest }}
+        run: node scripts/resolve-image.mjs --image "$IMAGE" --sha "$SHA" --digest "$DIGEST" --strict-tag
+
+      - name: Summary
+        env:
+          SHA: ${{ steps.staging.outputs.sha }}
+          DIGEST: ${{ steps.staging.outputs.digest }}
+        run: |
+          {
+            echo "### Ready to release $VERSION"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Commit | \`$SHA\` |"
+            echo "| Image digest | \`$DIGEST\` |"
+            echo
+            echo "The same digest that ran in staging is promoted: nothing is rebuilt."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-production:
+    name: Deploy to production
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      deployments: write
+    # Required reviewers (and the wait timer) on this environment hold the job
+    # here until somebody approves it.
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_SERVICE_ID: ${{ vars.RENDER_SERVICE_ID }}
+      APP_URL: ${{ vars.APP_URL }}
+    outputs:
+      result: ${{ steps.deploy.outputs.result }}
+      rolled_back_to: ${{ steps.deploy.outputs.rolled_back_to }}
+      url: ${{ vars.APP_URL }}
+    steps:
+      - name: Checkout tooling from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Read-only smoke tests: production data is never created by a pipeline.
+      - name: Deploy, verify and roll back on failure
+        id: deploy
+        env:
+          SHA: ${{ needs.validate.outputs.sha }}
+          IMAGE: ${{ needs.validate.outputs.image }}
+          DIGEST: ${{ needs.validate.outputs.digest }}
+        run: node scripts/cd-deploy.mjs --environment production --sha "$SHA" --image "$IMAGE" --digest "$DIGEST" --smoke-mode readonly
+
+  release:
+    name: Create GitHub Release
+    needs: [validate, deploy-production]
+    if: needs.deploy-production.outputs.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the tag and the release
+      actions: read # read who approved the deployment
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+      SHA: ${{ needs.validate.outputs.sha }}
+      DIGEST: ${{ needs.validate.outputs.digest }}
+      APP_URL: ${{ needs.deploy-production.outputs.url }}
+      TRIGGERED_BY: ${{ github.triggering_actor }}
+    steps:
+      - name: Create the tag and the release
+        run: |
+          approvers=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" \
+            --jq '[.[] | select(.state == "approved") | "@" + .user.login] | unique | join(", ")')
+          {
+            echo "## Deployment"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Commit | \`$SHA\` |"
+            echo "| Image digest | \`$DIGEST\` |"
+            echo "| Deployed by | @$TRIGGERED_BY |"
+            echo "| Approved by | ${approvers:-n/a} |"
+            echo "| URL | $APP_URL |"
+            echo "| Date (UTC) | $(date -u +%Y-%m-%dT%H:%M:%SZ) |"
+            echo "| Run | $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID |"
+            echo
+            echo "The image is the one verified in staging, promoted by digest."
+            echo
+          } > notes.md
+          gh release create "$VERSION" --target "$SHA" --title "$VERSION" \
+            --generate-notes --notes-file notes.md --latest
+          echo "### Release $VERSION created" >> "$GITHUB_STEP_SUMMARY"
+
+  notify:
+    name: Notify Discord
+    needs: [validate, deploy-production, release]
+    if: always() && needs.validate.result != 'skipped'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout tooling from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Send the notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          DEPLOY_RESULT: ${{ needs.deploy-production.result }}
+          DEPLOY_OUTCOME: ${{ needs.deploy-production.outputs.result }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+          ROLLED_BACK_TO: ${{ needs.deploy-production.outputs.rolled_back_to }}
+          SHA: ${{ needs.validate.outputs.sha }}
+          APP_URL: ${{ needs.deploy-production.outputs.url }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          status=failure
+          detail="The production deployment did not complete. See the run for details."
+          if [ "$VALIDATE_RESULT" != "success" ]; then
+            detail="Validation failed (version, staging history or image): nothing was deployed."
+          elif [ "$DEPLOY_OUTCOME" = "skipped" ]; then
+            status=skipped
+            detail="Render is not configured for production yet."
+          elif [ "$DEPLOY_RESULT" = "success" ]; then
+            status=success
+            detail="Promoted by digest from staging and verified."
+            if [ "$RELEASE_RESULT" != "success" ]; then
+              detail="$detail WARNING: the GitHub Release could not be created."
+            fi
+          elif [ "$DEPLOY_OUTCOME" = "rolled_back" ]; then
+            status=rolled_back
+            detail="The new version failed verification. Production was rolled back to ${ROLLED_BACK_TO:0:7}."
+          elif [ "$DEPLOY_RESULT" = "cancelled" ]; then
+            detail="The deployment was cancelled or the approval was rejected."
+          fi
+          node scripts/notify-discord.mjs --status "$status" --environment production \
+            --sha "${SHA:-$GITHUB_SHA}" --version "$VERSION" --url "$APP_URL" --detail "$detail"
